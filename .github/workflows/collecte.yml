@@ -4,10 +4,13 @@
 # --------------------------
 # Le seul moyen d'obtenir un vrai historique de prix, c'est de relever les prix
 # régulièrement pendant des semaines. Sur une machine personnelle il faudrait la
-# laisser allumée en permanence. GitHub exécute ce travail gratuitement :
-# illimité sur un dépôt public, 2 000 minutes par mois sur un dépôt privé — un
-# cycle de 25 min toutes les 6 h consomme ~3 000 min/mois, donc gardez le dépôt
-# public, ou espacez à 8 h pour tenir dans le quota privé.
+# laisser allumée en permanence ; GitHub le fait gratuitement.
+#
+# CADENCE : ce dépôt est PRIVÉ, donc le quota gratuit est de 2 000 minutes par
+# mois. Un cycle de 25 min toutes les 12 h consomme ~1 500 min/mois — on reste
+# confortablement dans le quota, avec de la marge pour les vérifications de
+# qualité. (Sur un dépôt public, Actions est illimité et une cadence de 6 h
+# serait possible : il suffirait de changer le cron ci-dessous.)
 #
 # OÙ VIT LA BASE
 # --------------
@@ -20,10 +23,10 @@ name: Collecte des prix
 
 on:
   schedule:
-    # Toutes les 6 heures. GitHub planifie en UTC et peut décaler de quelques
+    # Toutes les 12 heures. GitHub planifie en UTC et peut décaler de quelques
     # minutes en période de charge : sans importance ici, on veut de la
     # régularité, pas de la précision.
-    - cron: '0 */6 * * *'
+    - cron: '0 */12 * * *'
   # Permet de déclencher un cycle à la main depuis l'onglet Actions.
   workflow_dispatch:
 
@@ -79,8 +82,8 @@ jobs:
       - name: Publier le tableau de bord
         run: npm run stores >> "$GITHUB_STEP_SUMMARY"
 
-      # Les workflows planifiés d'un dépôt public sont désactivés après 60 jours
-      # sans activité. Ce commit trivial garde la collecte en vie.
+      # Les workflows planifiés sont désactivés après 60 jours sans activité sur
+      # le dépôt. Ce commit trivial garde la collecte en vie.
       - name: Marquer l'activité du dépôt
         run: |
           date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/derniere-collecte
