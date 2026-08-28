@@ -1,0 +1,55 @@
+# Contrôle qualité : typage, tests, build de production.
+#
+# Ces trois vérifications existaient déjà comme commandes locales, mais rien ne
+# les exécutait automatiquement — donc rien ne garantissait qu'elles étaient
+# lancées avant un changement. Ce workflow ferme ce trou : une régression sur le
+# moteur de score, un type cassé ou un build de production en échec bloquent la
+# branche au lieu d'être découverts des semaines plus tard.
+#
+# Le build de production compte autant que les tests : tout le développement
+# s'est fait en mode `npm run dev`, qui est bien plus tolérant que `next build`.
+
+name: Qualité
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typage
+        run: npm run typecheck
+
+      - name: Tests du moteur
+        run: npm test
+
+      # Le build a besoin d'une base : sans elle, les pages qui interrogent
+      # SQLite échouent au pré-rendu. Une base vide mais migrée suffit.
+      - name: Préparer une base vide
+        run: npm run db:migrate
+
+      - name: Build de production
+        run: npm run build
+
+      # L'audit de vraisemblance interroge les DONNEES, la ou le typage, les
+      # tests et le build n'interrogent que le code. Sur une base vide il ne
+      # peut rien conclure, mais sur un depot ou la collecte tourne il attrape
+      # la classe de defauts qui, sinon, n'est vue que par hasard.
+      - name: Audit de vraisemblance
+        run: npm run audit
+        continue-on-error: true

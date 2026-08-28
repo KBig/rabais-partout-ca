@@ -1,0 +1,91 @@
+# Collecte automatique des prix, 24 h/24, gratuitement.
+#
+# POURQUOI CE FICHIER EXISTE
+# --------------------------
+# Le seul moyen d'obtenir un vrai historique de prix, c'est de relever les prix
+# régulièrement pendant des semaines. Sur une machine personnelle il faudrait la
+# laisser allumée en permanence. GitHub exécute ce travail gratuitement :
+# illimité sur un dépôt public, 2 000 minutes par mois sur un dépôt privé — un
+# cycle de 25 min toutes les 6 h consomme ~3 000 min/mois, donc gardez le dépôt
+# public, ou espacez à 8 h pour tenir dans le quota privé.
+#
+# OÙ VIT LA BASE
+# --------------
+# Pas dans le dépôt Git : elle grossit à chaque cycle et GitHub refuse les
+# fichiers de plus de 100 Mo. Elle est stockée comme **asset de release**
+# (jusqu'à 2 Go, gratuit), téléchargée au début du job et re-téléversée à la
+# fin. La release `db` sert de conteneur permanent.
+
+name: Collecte des prix
+
+on:
+  schedule:
+    # Toutes les 6 heures. GitHub planifie en UTC et peut décaler de quelques
+    # minutes en période de charge : sans importance ici, on veut de la
+    # régularité, pas de la précision.
+    - cron: '0 */6 * * *'
+  # Permet de déclencher un cycle à la main depuis l'onglet Actions.
+  workflow_dispatch:
+
+# Un seul cycle à la fois : deux jobs concurrents écriraient la même base et le
+# dernier à finir écraserait le travail de l'autre.
+concurrency:
+  group: collecte
+  cancel-in-progress: false
+
+permissions:
+  contents: write # nécessaire pour téléverser la base sur la release
+
+jobs:
+  collecte:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Récupérer la base existante
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p data
+          # Première exécution : la release n'existe pas encore, on la crée.
+          if ! gh release view db >/dev/null 2>&1; then
+            gh release create db --title "Base de données" \
+              --notes "Base SQLite de collecte. Remplacée à chaque cycle."
+          fi
+          # Base absente = premier cycle : le script la créera de zéro.
+          gh release download db --pattern itemfinder.db --dir data --clobber \
+            || echo "Aucune base existante — démarrage à vide."
+
+      - name: Cycle de collecte
+        run: npm run ci:cycle -- --minutes 25
+
+      - name: Archiver la base
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ls -lh data/itemfinder.db
+          gh release upload db data/itemfinder.db --clobber
+
+      - name: Publier le tableau de bord
+        run: npm run stores >> "$GITHUB_STEP_SUMMARY"
+
+      # Les workflows planifiés d'un dépôt public sont désactivés après 60 jours
+      # sans activité. Ce commit trivial garde la collecte en vie.
+      - name: Marquer l'activité du dépôt
+        run: |
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/derniere-collecte
+          git config user.name "collecte"
+          git config user.email "collecte@users.noreply.github.com"
+          git add .github/derniere-collecte
+          git diff --staged --quiet || git commit -m "collecte: cycle terminé"
+          git push

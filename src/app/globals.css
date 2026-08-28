@@ -1,0 +1,59 @@
+@import 'tailwindcss';
+
+/*
+ * Tailwind v4 se configure en CSS, plus en JS. Le bloc @theme définit les
+ * jetons de design ; chaque variable génère automatiquement les classes
+ * correspondantes (bg-surface, text-muted, etc.).
+ */
+@theme {
+  --color-ink: #05070d;
+  --color-surface: #0b0f1a;
+  --color-raised: #121826;
+  --color-line: #1e2637;
+  --color-line-soft: #161d2b;
+
+  --color-text: #e8ecf4;
+  --color-muted: #8b98ae;
+  --color-faint: #5d6982;
+
+  --color-brand: #38e08b;
+  --color-brand-dim: #1c8f57;
+
+  --color-hot: #ff5c7a;
+  --color-warm: #ffb545;
+
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+
+  --radius-card: 14px;
+}
+
+html {
+  background: var(--color-ink);
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-ink);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Les prix et les scores en chiffres tabulaires : les colonnes s'alignent
+   verticalement dans les grilles, ce qui rend la comparaison bien plus lisible. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: var(--color-brand);
+  color: #04120a;
+}
+
+/* Barre de défilement discrète, cohérente avec le thème sombre. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
+}

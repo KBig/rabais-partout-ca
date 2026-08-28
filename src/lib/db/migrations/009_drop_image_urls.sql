@@ -1,0 +1,11 @@
+-- Suppression de image_urls : 48 Mo de redondance pure.
+--
+-- La colonne stockait 5 URL par produit qui ne different que par le segment de
+-- taille (.../1500x1500/... vs .../500x500/...). L'information est entierement
+-- derivable d'une seule URL : le composant d'affichage la reconstruit
+-- desormais lui-meme, en choisissant la resolution adaptee au contexte.
+--
+-- Ce n'est pas qu'une question d'elegance : la base atteignait 177 Mo, au-dela
+-- de ce que GitHub accepte dans un depot, ce qui bloquait l'hebergement gratuit
+-- de la collecte 24 h/24.
+ALTER TABLE products DROP COLUMN image_urls;
