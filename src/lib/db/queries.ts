@@ -39,6 +39,17 @@ export interface DealRow {
   reasons: string[];
   recommendYes: number | null;
   recommendTotal: number | null;
+  reviews: ProductReview[];
+}
+
+export interface ProductReview {
+  rating: number;
+  comment: string;
+  author: string | null;
+  date: string | null;
+  verified: boolean;
+  helpful: number;
+  incentivized: boolean;
 }
 
 const SELECT_DEAL = `
@@ -52,7 +63,8 @@ const SELECT_DEAL = `
          s.is_lowest_ever AS isLowestEver, s.median_90d AS median,
          s.min_ever AS minEver, s.max_ever AS maxEver,
          s.days_of_history AS daysOfHistory, s.reasons,
-         e.recommend_yes AS recommendYes, e.recommend_total AS recommendTotal
+         e.recommend_yes AS recommendYes, e.recommend_total AS recommendTotal,
+         e.reviews AS reviewsJson
     FROM deal_scores s
     JOIN products p ON p.id = s.product_id
     JOIN stores   st ON st.id = p.store_id
@@ -60,7 +72,22 @@ const SELECT_DEAL = `
 `;
 
 function hydrate(r: any): DealRow {
-  return { ...r, reasons: safeParse(r.reasons) };
+  return {
+    ...r,
+    reasons: safeParse(r.reasons),
+    reviews: safeParseObjects<ProductReview>(r.reviewsJson),
+  };
+}
+
+/** Comme safeParse, mais pour un tableau d'objets. */
+function safeParseObjects<T>(json: string | null): T[] {
+  if (!json) return [];
+  try {
+    const v = JSON.parse(json);
+    return Array.isArray(v) ? (v as T[]) : [];
+  } catch {
+    return [];
+  }
 }
 
 function safeParse(json: string | null): string[] {

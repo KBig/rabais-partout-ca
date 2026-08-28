@@ -115,11 +115,11 @@ export async function enrichStore(opts: EnrichOptions): Promise<EnrichResult> {
   const upsert = conn.prepare(`
     INSERT INTO product_enrichment (
       product_id, brand, model, manufacturer, rating, rating_count,
-      rating_histogram, recommend_yes, recommend_total,
+      rating_histogram, recommend_yes, recommend_total, reviews,
       sources, agreement, conflicts, status, attempts, last_error, enriched_at
     ) VALUES (
       @id, @brand, @model, @manufacturer, @rating, @ratingCount,
-      @histogram, @recYes, @recTotal,
+      @histogram, @recYes, @recTotal, @reviews,
       @sources, @agreement, @conflicts, @status, 1, @error, @ts
     )
     ON CONFLICT(product_id) DO UPDATE SET
@@ -131,6 +131,7 @@ export async function enrichStore(opts: EnrichOptions): Promise<EnrichResult> {
       rating_histogram = COALESCE(excluded.rating_histogram, product_enrichment.rating_histogram),
       recommend_yes = COALESCE(excluded.recommend_yes, product_enrichment.recommend_yes),
       recommend_total = COALESCE(excluded.recommend_total, product_enrichment.recommend_total),
+      reviews = COALESCE(excluded.reviews, product_enrichment.reviews),
       sources = excluded.sources,
       agreement = excluded.agreement,
       conflicts = excluded.conflicts,
@@ -183,6 +184,7 @@ export async function enrichStore(opts: EnrichOptions): Promise<EnrichResult> {
         histogram: f.ratingHistogram ? JSON.stringify(f.ratingHistogram) : null,
         recYes: f.recommendYes ?? null,
         recTotal: f.recommendTotal ?? null,
+        reviews: f.reviews?.length ? JSON.stringify(f.reviews) : null,
         sources: JSON.stringify(resolved.sources),
         agreement: resolved.agreement,
         conflicts: resolved.conflicts.length ? JSON.stringify(resolved.conflicts) : null,
@@ -239,6 +241,7 @@ export async function enrichStore(opts: EnrichOptions): Promise<EnrichResult> {
       upsert.run({
         id: row.id, brand: null, model: null, manufacturer: null,
         rating: null, ratingCount: null, histogram: null, recYes: null, recTotal: null,
+        reviews: null,
         sources: '[]', agreement: 0, conflicts: null, status: 'failed',
         error: message.slice(0, 300), ts: nowIso(),
       });

@@ -44,9 +44,30 @@ export interface EnrichedFacts {
    * Prix officiel publie par le FABRICANT — l'ancre de reference la plus
    * fiable qui existe, puisqu'elle vient de celui qui fixe le prix.
    */
+  /** Deux avis retenus : le plus utile favorable, le plus utile critique. */
+  reviews?: SelectedReview[] | null;
+
   manufacturerPrice?: number | null;
   manufacturerName?: string | null;
   manufacturerUrl?: string | null;
+}
+
+export interface SelectedReview {
+  rating: number;
+  comment: string;
+  author: string | null;
+  date: string | null;
+  /** Achat verifie par le marchand. */
+  verified: boolean;
+  /** Nombre d'acheteurs ayant juge cet avis utile. */
+  helpful: number;
+  /**
+   * Avis obtenu en echange d'un avantage (echantillon, concours).
+   *
+   * Les marchands le signalent dans le texte. Ces avis sont statistiquement
+   * plus indulgents : le lecteur merite de le savoir.
+   */
+  incentivized: boolean;
 }
 
 export interface SourceResult {

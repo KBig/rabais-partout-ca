@@ -1,4 +1,9 @@
-import type { EnrichmentSource, EnrichedFacts, ProductRef } from '../types';
+import type {
+  EnrichmentSource,
+  EnrichedFacts,
+  ProductRef,
+  SelectedReview,
+} from '../types';
 
 /**
  * Sources d'enrichissement Best Buy.
@@ -34,11 +39,68 @@ interface BbRatingSummary {
   OverallReviewCount?: number;
 }
 
+interface BbReview {
+  comment?: string | null;
+  rating?: number | null;
+  reviewerName?: string | null;
+  submissionTime?: string | null;
+  isVerifiedPurchaser?: boolean;
+  totalPositiveFeedbackCount?: number;
+}
+
 interface BbReviews {
   customerRating?: number | null;
   customerRatingCount?: number | null;
   Brand?: string | null;
   RatingSummary?: BbRatingSummary | null;
+  reviews?: BbReview[];
+}
+
+/**
+ * Les marchands signalent dans le texte les avis obtenus contre un avantage.
+ * Ces avis sont statistiquement plus indulgents : on les marque plutot que de
+ * les jeter, et l'interface le dit au lecteur.
+ */
+const INCENTIVE_MARK =
+  /\[?(?:this review was collected as part of a promotion|cet avis a ete recueilli dans le cadre d.une promotion)[^\]]*\]?/i;
+
+/**
+ * Retient DEUX avis : le plus utile parmi les favorables, et le plus utile
+ * parmi les critiques.
+ *
+ * Aligner cinq avis elogieux n'aide personne a decider. Ce qu'on cherche avant
+ * d'acheter, c'est « qu'est-ce qui cloche ? » — donc un avis de chaque bord,
+ * choisis sur l'utilite votee par les autres acheteurs plutot que sur leur date.
+ */
+function selectReviews(reviews: BbReview[]): SelectedReview[] {
+  const utiles = reviews
+    .filter((r) => typeof r.comment === 'string' && r.comment.trim().length > 40)
+    .map((r) => {
+      const brut = r.comment!.trim();
+      const incentivized = INCENTIVE_MARK.test(brut);
+      return {
+        rating: r.rating ?? 0,
+        // On retire la mention de promotion du texte : elle est portee par le
+        // drapeau, et la repeter dans chaque extrait alourdit la lecture.
+        comment: brut.replace(INCENTIVE_MARK, '').trim(),
+        author: r.reviewerName ?? null,
+        date: r.submissionTime ?? null,
+        verified: Boolean(r.isVerifiedPurchaser),
+        helpful: r.totalPositiveFeedbackCount ?? 0,
+        incentivized,
+      } satisfies SelectedReview;
+    })
+    .filter((r) => r.comment.length > 40);
+
+  // A utilite egale, l'achat verifie l'emporte : c'est la meilleure garantie
+  // que l'auteur a reellement eu le produit entre les mains.
+  const parPertinence = (a: SelectedReview, b: SelectedReview) =>
+    b.helpful - a.helpful || Number(b.verified) - Number(a.verified);
+
+  const favorable = utiles.filter((r) => r.rating >= 4).sort(parPertinence)[0];
+  const critique = utiles.filter((r) => r.rating <= 3).sort(parPertinence)[0];
+
+  return [favorable, critique].filter(Boolean) as SelectedReview[];
 }
 
 /** Marque + numéro de modèle depuis la fiche produit. */
@@ -97,6 +159,9 @@ export const bestBuyReviewsSource: EnrichmentSource = {
       ratingHistogram: histogram,
       recommendYes: yes,
       recommendTotal: total,
+      // Le texte arrivait deja dans cette reponse et etait jete : aucune
+      // requete supplementaire.
+      reviews: selectReviews(d.reviews ?? []),
     };
   },
 };

@@ -121,6 +121,10 @@ export async function resolveEnrichment(
     facts.recommendTotal = binomials[0].facts.recommendTotal ?? null;
   }
 
+  // Les avis viennent d'une seule source a la fois : on prend celle qui en a.
+  const avecAvis = results.find((r) => (r.facts.reviews?.length ?? 0) > 0);
+  if (avecAvis) facts.reviews = avecAvis.facts.reviews ?? null;
+
   const withHistogram = results.find((r) => r.facts.ratingHistogram);
   if (withHistogram) facts.ratingHistogram = withHistogram.facts.ratingHistogram ?? null;
 

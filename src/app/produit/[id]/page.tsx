@@ -259,6 +259,59 @@ export default async function ProductPage({
         </section>
       )}
 
+      {product.reviews.length > 0 && (
+        <section>
+          <h2 className="mb-1 text-lg font-semibold tracking-tight">Ce qu&apos;en disent les acheteurs</h2>
+          <p className="mb-3 text-sm text-muted">
+            Un avis favorable et un avis critique, choisis sur leur utilite votee par les
+            autres acheteurs — pas sur leur date. Ce qu&apos;on cherche avant d&apos;acheter,
+            c&apos;est aussi ce qui cloche.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {product.reviews.map((av, i) => (
+              <blockquote
+                key={i}
+                className="rounded-card border border-line bg-surface p-4"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={`tnum rounded px-1.5 py-0.5 text-xs font-bold ${
+                      av.rating >= 4 ? 'bg-brand/15 text-brand' : 'bg-hot/15 text-hot'
+                    }`}
+                  >
+                    {av.rating}/5
+                  </span>
+                  {av.verified && (
+                    <span className="text-[10px] uppercase tracking-wide text-faint">
+                      Achat verifie
+                    </span>
+                  )}
+                  {av.helpful > 0 && (
+                    <span className="text-[10px] text-faint">
+                      {av.helpful} personne{av.helpful > 1 ? 's' : ''} l&apos;ont trouve utile
+                    </span>
+                  )}
+                </div>
+
+                <p className="mt-2 text-sm leading-relaxed text-muted">
+                  {av.comment.length > 320 ? `${av.comment.slice(0, 320)}\u2026` : av.comment}
+                </p>
+
+                <footer className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-faint">
+                  {av.author && <span>{av.author}</span>}
+                  {av.date && <span>{av.date.slice(0, 10)}</span>}
+                  {av.incentivized && (
+                    // Les avis obtenus contre un avantage sont statistiquement
+                    // plus indulgents : le lecteur merite de le savoir.
+                    <span className="text-warm">Avis obtenu en echange d&apos;un avantage</span>
+                  )}
+                </footer>
+              </blockquote>
+            ))}
+          </div>
+        </section>
+      )}
+
       {face.length > 0 && (
         <section>
           <h2 className="mb-1 text-lg font-semibold tracking-tight">Comparatif</h2>
