@@ -39,6 +39,14 @@ export interface EnrichedFacts {
   /** Binomiale recommandation : autorise une borne de Wilson. */
   recommendYes?: number | null;
   recommendTotal?: number | null;
+
+  /**
+   * Prix officiel publie par le FABRICANT — l'ancre de reference la plus
+   * fiable qui existe, puisqu'elle vient de celui qui fixe le prix.
+   */
+  manufacturerPrice?: number | null;
+  manufacturerName?: string | null;
+  manufacturerUrl?: string | null;
 }
 
 export interface SourceResult {

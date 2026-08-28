@@ -4,6 +4,7 @@ import { HttpClient } from '../scraping/core/http';
 import { resolveEnrichment } from './resolver';
 import { bestBuyDetailSource, bestBuyReviewsSource } from './sources/bestbuy';
 import { crossStoreSource } from './sources/cross-store';
+import { manufacturerPriceSource } from './sources/manufacturer';
 import type { EnrichmentSource, ProductRef } from './types';
 
 /**
@@ -23,6 +24,7 @@ export const ALL_SOURCES: EnrichmentSource[] = [
   bestBuyDetailSource,
   bestBuyReviewsSource,
   crossStoreSource,
+  manufacturerPriceSource,
 ];
 
 export interface EnrichOptions {
@@ -192,6 +194,36 @@ export async function enrichStore(opts: EnrichOptions): Promise<EnrichResult> {
       conn.transaction(() => {
         upsert.run(payload);
         applyToProduct.run(payload);
+
+        // Un prix constructeur est une RÉFÉRENCE, pas une offre concurrente :
+        // il rejoint price_references, où le moteur de score le lit comme
+        // quatrième signal — au même titre qu'une fourchette trouvée sur le web,
+        // mais avec une confiance bien supérieure.
+        if (f.manufacturerPrice && f.manufacturerPrice > 0) {
+          conn
+            .prepare(
+              `INSERT INTO price_references (
+                 product_id, launch_price, typical_price, currency,
+                 sources, notes, confidence, found, model, cost_usd, checked_at
+               ) VALUES (@id, @prix, @prix, 'CAD', @sources, @notes, 0.88, 1,
+                         'manufacturer', 0, @ts)
+               ON CONFLICT(product_id) DO UPDATE SET
+                 launch_price = excluded.launch_price,
+                 typical_price = excluded.typical_price,
+                 sources = excluded.sources,
+                 notes = excluded.notes,
+                 confidence = excluded.confidence,
+                 found = 1,
+                 checked_at = excluded.checked_at`,
+            )
+            .run({
+              id: row.id,
+              prix: f.manufacturerPrice,
+              sources: JSON.stringify([f.manufacturerUrl].filter(Boolean)),
+              notes: `Prix officiel ${f.manufacturerName ?? 'constructeur'} : ${f.manufacturerPrice.toFixed(2)} $`,
+              ts: nowIso(),
+            });
+        }
       })();
 
       if (resolved.status === 'ok') result.ok++;
