@@ -5,8 +5,11 @@ import {
   priceHistory,
   competingOffers,
   betterAlternatives,
+  comparables,
+  categoryRank,
   topDeals,
 } from '@/lib/db/queries';
+import { extractSpecs, leadSentence, SPEC_GROUP_LABEL, type Spec } from '@/lib/specs';
 import { categoryName } from '@/lib/categories';
 import { ScoreBadge, ConfidenceLabel } from '@/components/ScoreBadge';
 import { PriceChart } from '@/components/PriceChart';
@@ -29,6 +32,10 @@ export default async function ProductPage({
   const history = priceHistory(product.id);
   const competitors = competingOffers(product);
   const alternatives = betterAlternatives(product);
+  const face = comparables(product);
+  const rang = categoryRank(product);
+  const specs = extractSpecs(product.title, product.description);
+  const accroche = leadSentence(product.description);
   const similar = product.categorySlug
     ? topDeals({ category: product.categorySlug, limit: 10 }).filter((d) => d.id !== product.id)
     : [];
@@ -159,15 +166,35 @@ export default async function ProductPage({
         </div>
       </div>
 
-      {product.description && (
+      {(accroche || specs.length > 0) && (
         <section>
-          <h2 className="mb-3 text-lg font-semibold tracking-tight">Description</h2>
-          <p className="max-w-3xl text-sm leading-relaxed text-muted">
-            {product.description}
-          </p>
-          <p className="mt-2 text-[11px] text-faint">
-            Descriptif fourni par {product.storeName}.
-          </p>
+          <h2 className="mb-3 text-lg font-semibold tracking-tight">
+            Ce qu&apos;il faut savoir
+          </h2>
+
+          {accroche && (
+            <p className="max-w-3xl text-sm leading-relaxed text-muted">{accroche}</p>
+          )}
+
+          {specs.length > 0 && (
+            <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+              {specs.map((sp: Spec) => (
+                <div
+                  key={sp.label}
+                  className="rounded-card border border-line bg-surface px-4 py-3"
+                >
+                  <dt className="flex items-baseline justify-between gap-2">
+                    <span className="text-sm font-semibold text-text">{sp.label}</span>
+                    <span className="shrink-0 text-[10px] uppercase tracking-wide text-faint">
+                      {SPEC_GROUP_LABEL[sp.group]}
+                    </span>
+                  </dt>
+                  {/* L'important n'est pas la caracteristique, c'est ce qu'elle change. */}
+                  <dd className="mt-1 text-xs leading-relaxed text-muted">{sp.effect}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
         </section>
       )}
 
@@ -229,6 +256,109 @@ export default async function ProductPage({
             Rapproché par numéro de modèle {product.model}.
           </p>
           <DealGrid deals={competitors} />
+        </section>
+      )}
+
+      {face.length > 0 && (
+        <section>
+          <h2 className="mb-1 text-lg font-semibold tracking-tight">Comparatif</h2>
+          <p className="mb-3 text-sm text-muted">
+            Les articles les plus proches en prix, a caracteristiques equivalentes. Le
+            score tient compte du rabais reel et de la qualite mesuree : a prix voisin,
+            le mieux note offre le meilleur rapport.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-line text-left text-[11px] uppercase tracking-wide text-faint">
+                  <th className="py-2 pr-3 font-medium">Produit</th>
+                  <th className="py-2 pr-3 font-medium">Prix</th>
+                  <th className="py-2 pr-3 font-medium">Score</th>
+                  <th className="py-2 font-medium">Qualite</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-line-soft bg-brand/5">
+                  <td className="py-2.5 pr-3">
+                    <span className="font-semibold text-brand">Celui-ci</span>
+                  </td>
+                  <td className="tnum py-2.5 pr-3 font-semibold">{money(product.price)}</td>
+                  <td className="tnum py-2.5 pr-3">{Math.round(product.score)}</td>
+                  <td className="py-2.5 text-xs text-muted">
+                    {product.recommendTotal
+                      ? `${Math.round(((product.recommendYes ?? 0) / product.recommendTotal) * 100)} %`
+                      : product.rating
+                        ? `${product.rating.toFixed(1)}/5`
+                        : '\u2014'}
+                  </td>
+                </tr>
+                {face.map((c) => (
+                  <tr key={c.id} className="border-b border-line-soft">
+                    <td className="py-2.5 pr-3">
+                      <Link href={`/produit/${c.id}`} className="text-muted hover:text-brand">
+                        {c.title.slice(0, 52)}
+                      </Link>
+                    </td>
+                    <td className="tnum py-2.5 pr-3">
+                      {money(c.price)}
+                      {c.price < product.price && (
+                        <span className="ml-1 text-[10px] text-brand">
+                          &minus;{money(product.price - c.price)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="tnum py-2.5 pr-3">
+                      <span
+                        className={c.score > product.score ? 'font-semibold text-brand' : ''}
+                      >
+                        {Math.round(c.score)}
+                      </span>
+                    </td>
+                    <td className="py-2.5 text-xs text-muted">
+                      {c.recommendTotal
+                        ? `${Math.round(((c.recommendYes ?? 0) / c.recommendTotal) * 100)} %`
+                        : c.rating
+                          ? `${c.rating.toFixed(1)}/5`
+                          : '\u2014'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {rang && (
+        <section>
+          <h2 className="mb-1 text-lg font-semibold tracking-tight">Classement</h2>
+          <p className="mb-3 text-sm text-muted">
+            <span className="tnum font-semibold text-text">
+              {rang.rank}
+              <sup>{rang.rank === 1 ? 'er' : 'e'}</sup>
+            </span>{' '}
+            sur {num(rang.total)} produits en {rang.categoryName}.
+            {rang.rank <= 3
+              ? ' Il fait partie des mieux classes de sa categorie.'
+              : ' Voici les mieux classes, pour situer.'}
+          </p>
+          <ol className="space-y-1.5">
+            {rang.leaders.map((l, i) => (
+              <li key={l.id} className="flex items-baseline gap-3 text-sm">
+                <span className="tnum w-5 shrink-0 text-faint">{i + 1}.</span>
+                <Link
+                  href={`/produit/${l.id}`}
+                  className="min-w-0 flex-1 truncate text-muted transition-colors hover:text-brand"
+                >
+                  {l.title}
+                </Link>
+                <span className="tnum shrink-0 text-xs text-faint">{money(l.price)}</span>
+                <span className="tnum w-8 shrink-0 text-right text-xs font-semibold text-text">
+                  {Math.round(l.score)}
+                </span>
+              </li>
+            ))}
+          </ol>
         </section>
       )}
 

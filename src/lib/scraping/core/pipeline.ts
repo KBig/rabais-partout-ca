@@ -65,6 +65,40 @@ const MAX_PLAUSIBLE_LIST_RATIO = 6;
  * On corrige donc à la SOURCE, une seule fois, plutôt que de se souvenir de
  * tester `> 0` à chaque lecture. Tout magasin ajouté ensuite en bénéficie.
  */
+/**
+ * Nettoie un descriptif marchand.
+ *
+ * Les marchands renvoient du HTML dans leurs champs texte :
+ * « <p><strong>Produit boite ouverte certifie…</strong></p>Profitez d'une… ».
+ * Affiche tel quel, on voyait les balises a l'ecran.
+ *
+ * On ne rend PAS ce HTML : le contenu vient d'un tiers, et l'injecter dans la
+ * page ouvrirait la porte a du balisage arbitraire. On le convertit donc en
+ * texte, en preservant les separations de blocs pour que les phrases ne se
+ * collent pas les unes aux autres.
+ */
+function cleanDescription(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+
+  const texte = raw
+    // Les fins de bloc deviennent des espaces : sans cela « …ci-dessous.</p>
+    // <p>Profitez… » donnerait « ci-dessous.Profitez ».
+    .replace(/<\/(p|div|li|br|h[1-6])\s*>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]+>/g, '')
+    // Entites HTML les plus courantes dans les fiches produit.
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return texte.length > 0 ? texte : null;
+}
+
 function normalizeRating(
   rating: number | null | undefined,
   count: number | null | undefined,
@@ -280,7 +314,7 @@ function ingestBatch(
         title: p.title,
         model: p.model ?? null,
         imageUrl: p.imageUrl ?? null,
-        description: p.description ?? null,
+        description: cleanDescription(p.description),
         categorySlug: p.categorySlug ?? null,
         storeCategory: p.storeCategory ?? null,
         rating: normalizeRating(p.rating, p.ratingCount).rating,

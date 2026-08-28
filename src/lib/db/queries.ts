@@ -591,6 +591,101 @@ export function suggest(raw: string, limit = 4): Suggestion[] {
   return out;
 }
 
+
+export interface CategoryRank {
+  /** Rang du produit dans sa catégorie, 1 = meilleur score. */
+  rank: number;
+  /** Nombre de produits classés dans cette catégorie. */
+  total: number;
+  categoryName: string;
+  /** Les mieux classés de la catégorie, pour situer le produit. */
+  leaders: Array<{ id: number; title: string; price: number; score: number }>;
+}
+
+/**
+ * Position du produit dans sa catégorie, et qui occupe la tête.
+ *
+ * Un score de 43 ne dit rien seul : est-ce bon ? Savoir qu'il est 12e sur 4 000
+ * répond à la question, et voir les trois premiers permet de juger si l'écart
+ * vaut la différence de prix.
+ *
+ * Quand le produit fait DÉJÀ partie des trois premiers, on montre les autres
+ * membres du podium plutôt que de le lister lui-même — se voir proposer ce
+ * qu'on regarde déjà n'apprend rien.
+ */
+export function categoryRank(product: DealRow): CategoryRank | null {
+  if (!product.categorySlug) return null;
+  const conn = db();
+
+  const meilleurs = conn
+    .prepare<[string, number], { n: number }>(
+      `SELECT COUNT(*) n FROM deal_scores
+        WHERE is_active = 1 AND category_slug = ? AND score > ?`,
+    )
+    .get(product.categorySlug, product.score)!.n;
+
+  const total = conn
+    .prepare<[string], { n: number }>(
+      'SELECT COUNT(*) n FROM deal_scores WHERE is_active = 1 AND category_slug = ?',
+    )
+    .get(product.categorySlug)!.n;
+
+  if (total < 5) return null;
+
+  const leaders = conn
+    .prepare<[string, number], { id: number; title: string; price: number; score: number }>(
+      `SELECT s.product_id AS id, p.title, s.price, s.score
+         FROM deal_scores s JOIN products p ON p.id = s.product_id
+        WHERE s.is_active = 1 AND s.category_slug = ? AND s.product_id != ?
+        ORDER BY s.score DESC LIMIT 3`,
+    )
+    .all(product.categorySlug, product.id);
+
+  return {
+    rank: meilleurs + 1,
+    total,
+    categoryName: categoryNameOf(product.categorySlug),
+    leaders,
+  };
+}
+
+function categoryNameOf(slug: string): string {
+  const r = db()
+    .prepare<[string], { name: string }>('SELECT name FROM categories WHERE slug = ?')
+    .get(slug);
+  return r?.name ?? slug;
+}
+
+/**
+ * Produits vraiment comparables, pour un face-à-face.
+ *
+ * On reste dans le MÊME groupe de pairs — même format, mêmes caractéristiques
+ * déterminantes — et on retient les plus proches en prix. Proposer un modèle
+ * deux fois plus cher ne permet pas de juger un rapport qualité-prix ; le
+ * comparer à des articles de sa gamme, si.
+ */
+export function comparables(product: DealRow, limit = 3): DealRow[] {
+  const key = db()
+    .prepare<[number], { peer_key: string | null }>(
+      'SELECT peer_key FROM deal_scores WHERE product_id = ?',
+    )
+    .get(product.id);
+
+  if (!key?.peer_key) return [];
+
+  return db()
+    .prepare(
+      `${SELECT_DEAL}
+        WHERE s.peer_key = @key
+          AND s.is_active = 1
+          AND s.product_id != @id
+        ORDER BY ABS(s.price - @price) ASC
+        LIMIT @limit`,
+    )
+    .all({ key: key.peer_key, id: product.id, price: product.price, limit })
+    .map(hydrate);
+}
+
 export interface CategoryCount {
   slug: string;
   name: string;
