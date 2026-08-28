@@ -36,6 +36,25 @@ export interface RawProduct {
 
   /** neuf par defaut ; 'open-box' et 'refurbished' sont notes differemment. */
   condition?: ProductCondition;
+
+  /**
+   * Ou peut-on l'acheter ? 'les-deux' par defaut.
+   *
+   * Un article disponible seulement en ligne demande une livraison ; un article
+   * reserve au magasin demande un deplacement. Ca change concretement la
+   * decision, et le marchand le sait — il ne le disait simplement pas chez nous.
+   */
+  availability?: 'en-ligne' | 'en-magasin' | 'les-deux';
+
+  /**
+   * Vendu par un TIERS sur la place de marche du detaillant.
+   *
+   * Un quart des articles d'une page de listing en relevent. Politique de
+   * retour, delais et service apres-vente different de ceux du detaillant :
+   * l'acheteur merite de le savoir avant de comparer deux prix.
+   */
+  marketplace?: boolean;
+  sellerName?: string | null;
 }
 
 export type ProductCondition = 'new' | 'open-box' | 'refurbished';

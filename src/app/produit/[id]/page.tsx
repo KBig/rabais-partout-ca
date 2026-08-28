@@ -16,7 +16,14 @@ import { PriceChart } from '@/components/PriceChart';
 import { DealGrid } from '@/components/DealCard';
 import { ProductImage } from '@/components/ProductImage';
 import { BackButton } from '@/components/BackButton';
-import { money, num, pct, CONDITION_LABEL, scoreTone } from '@/lib/format';
+import {
+  money,
+  num,
+  pct,
+  CONDITION_LABEL,
+  AVAILABILITY_LABEL,
+  scoreTone,
+} from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -158,6 +165,29 @@ export default async function ProductPage({
               ))}
             </ul>
           )}
+
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+            <span className="flex items-center gap-1.5 text-muted">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                className="h-3.5 w-3.5 text-faint"
+                aria-hidden
+              >
+                <path d="M3 9h18M5 9V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3M5 9v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9" />
+              </svg>
+              {AVAILABILITY_LABEL[product.availability] ?? 'Disponibilité inconnue'}
+            </span>
+
+            {product.marketplace === 1 && (
+              <span className="text-warm">
+                Vendu par {product.sellerName ?? 'un vendeur tiers'} — retours et service
+                après-vente selon ses propres conditions
+              </span>
+            )}
+          </div>
 
           <p className="text-[11px] text-faint">
             Prix affiché par le marchand, écofrais provinciaux en sus le cas échéant.

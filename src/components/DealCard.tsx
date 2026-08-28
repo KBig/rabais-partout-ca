@@ -46,6 +46,17 @@ export function DealCard({ deal, priority = false }: { deal: DealRow; priority?:
               {CONDITION_LABEL[deal.condition] ?? deal.condition}
             </span>
           )}
+          {/*
+            Un vendeur tiers doit se voir AVANT le clic : politique de retour,
+            delais et service apres-vente different de ceux du detaillant.
+            Comparer deux prix sans le savoir revient a comparer deux choses
+            differentes.
+          */}
+          {deal.marketplace === 1 && (
+            <span className="rounded-md bg-ink/85 px-2 py-0.5 text-[10px] font-semibold text-muted backdrop-blur">
+              Vendeur tiers
+            </span>
+          )}
         </div>
 
         <span

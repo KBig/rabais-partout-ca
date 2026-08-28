@@ -22,6 +22,9 @@ export interface DealRow {
   storeColor: string | null;
   categorySlug: string | null;
   condition: string;
+  availability: string;
+  marketplace: number;
+  sellerName: string | null;
   currency: string;
   price: number;
   listPrice: number | null;
@@ -57,6 +60,7 @@ const SELECT_DEAL = `
          p.description,
          p.store_id AS storeId, st.name AS storeName, st.color AS storeColor,
          p.category_slug AS categorySlug, p.condition, p.currency,
+         p.availability, p.marketplace, p.seller_name AS sellerName,
          p.current_price AS price, p.list_price AS listPrice, p.in_stock AS inStock,
          p.rating, p.rating_count AS ratingCount,
          s.score, s.confidence, s.drop_vs_median AS dropVsMedian,

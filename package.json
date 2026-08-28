@@ -22,7 +22,8 @@
     "reference": "tsx scripts/reference.ts",
     "ci:cycle": "tsx scripts/ci-cycle.ts",
     "audit": "tsx scripts/audit.ts",
-    "export:public": "tsx scripts/export-public.ts"
+    "export:public": "tsx scripts/export-public.ts",
+    "sitemaps": "tsx scripts/sitemaps.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",

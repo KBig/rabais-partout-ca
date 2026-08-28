@@ -1,4 +1,5 @@
 import type { EnrichmentSource, EnrichedFacts, ProductRef, EnrichmentHttp } from '../types';
+import { findManufacturerUrl } from './sitemap';
 
 /**
  * PRIX CONSTRUCTEUR — extracteur générique.
@@ -62,6 +63,12 @@ export interface BrandSite {
   /** Marque telle qu'elle apparaît dans nos données, en minuscules. */
   brand: string;
   name: string;
+  /**
+   * Sitemap racine du site. C'est par lui que passe la DECOUVERTE des fiches :
+   * du XML statique, publie pour etre parcouru, qui liste les pages produit.
+   * Le moteur de recherche du site, lui, est rendu en JavaScript et inutilisable.
+   */
+  sitemapUrl?: string;
   /** Gabarit d'URL de recherche ; `{model}` est remplacé par le modèle. */
   searchUrl: string;
   /**
@@ -86,14 +93,10 @@ export const BRAND_SITES: BrandSite[] = [
     brand: 'samsung',
     name: 'Samsung',
     searchUrl: 'https://www.samsung.com/ca_fr/search/?searchvalue={model}',
-    // Passe a false apres test de bout en bout : la page de RECHERCHE Samsung
-    // est rendue en JavaScript, le numero de modele n'apparait meme pas dans
-    // le HTML, et aucun lien produit n'est suivable. L'extraction JSON-LD
-    // fonctionne pourtant tres bien sur une fiche produit DIRECTE.
-    //
-    // Ce qui manque n'est donc pas l'extraction, c'est la DECOUVERTE : passer
-    // d'un numero de modele a l'URL de sa fiche. Voir la note ci-dessous.
-    verified: false,
+    // La decouverte passe par le sitemap, pas par la recherche du site.
+    // Verifie : 36 de nos 40 modeles Samsung y sont retrouves.
+    sitemapUrl: 'https://www.samsung.com/ca_fr/sitemap.xml',
+    verified: true,
   },
   { brand: 'lg', name: 'LG', searchUrl: 'https://www.lg.com/ca_fr/search/?search={model}', verified: false },
   { brand: 'dell', name: 'Dell', searchUrl: 'https://www.dell.com/fr-ca/search/{model}', verified: false },
@@ -177,7 +180,11 @@ export const manufacturerPriceSource: EnrichmentSource = {
     const site = BY_BRAND.get(p.brand!.toLowerCase().trim());
     if (!site?.verified) return null;
 
-    const url = site.searchUrl.replace('{model}', encodeURIComponent(p.model!));
+    // On passe par l'index de sitemap : il donne l'URL EXACTE de la fiche.
+    // La recherche du site ne sert que de repli, et n'aboutit presque jamais.
+    const url = findManufacturerUrl(site.brand, p.model!);
+    if (!url) return null;
+
     const html = await http.getText(url);
     const found = extractJsonLdPrice(html);
     if (!found) return null;

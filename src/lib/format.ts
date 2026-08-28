@@ -62,6 +62,12 @@ export function scoreTone(score: number): {
   return { ring: 'ring-line-soft', text: 'text-faint', bg: 'bg-raised', label: 'Faible' };
 }
 
+export const AVAILABILITY_LABEL: Record<string, string> = {
+  'en-ligne': 'En ligne seulement',
+  'en-magasin': 'En magasin seulement',
+  'les-deux': 'En ligne et en magasin',
+};
+
 export const CONDITION_LABEL: Record<string, string> = {
   new: 'Neuf',
   'open-box': 'Boîte ouverte',

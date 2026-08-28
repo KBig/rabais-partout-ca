@@ -152,6 +152,10 @@ interface BbProduct {
   categoryName?: string | null;
   isVisible?: boolean;
   isPreorderable?: boolean;
+  isOnlineOnly?: boolean;
+  isInStoreOnly?: boolean;
+  isMarketplace?: boolean;
+  seller?: { id?: string; name?: string } | null;
 }
 
 interface BbSearchResponse {
@@ -250,6 +254,13 @@ function toRawProduct(p: BbProduct, categorySlug: string): RawProduct | null {
     storeCategory: p.categoryName ?? null,
     categorySlug,
     condition: detectCondition(p.name),
+    availability: p.isOnlineOnly
+      ? 'en-ligne'
+      : p.isInStoreOnly
+        ? 'en-magasin'
+        : 'les-deux',
+    marketplace: Boolean(p.isMarketplace),
+    sellerName: p.seller?.name ?? null,
   };
 }
 

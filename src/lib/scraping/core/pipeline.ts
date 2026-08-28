@@ -294,11 +294,13 @@ function ingestBatch(
     INSERT INTO products (
       store_id, store_sku, url, title, brand, model, image_url,
       category_slug, store_category, rating, rating_count, condition, description,
+      availability, marketplace, seller_name,
       currency, current_price, list_price, in_stock,
       first_seen_at, last_seen_at, last_price_change_at, is_active
     ) VALUES (
       @storeId, @sku, @url, @title, @brand, @model, @imageUrl,
       @categorySlug, @storeCategory, @rating, @ratingCount, @condition, @description,
+      @availability, @marketplace, @sellerName,
       @currency, @price, @listPrice, @inStock,
       @ts, @ts, @ts, 1
     )
@@ -316,6 +318,9 @@ function ingestBatch(
       rating = COALESCE(@rating, rating),
       rating_count = COALESCE(@ratingCount, rating_count),
       condition = @condition,
+      availability = @availability,
+      marketplace = @marketplace,
+      seller_name = @sellerName,
       last_seen_at = @ts, is_active = 1
     WHERE id = @id
   `);
@@ -347,6 +352,9 @@ function ingestBatch(
         rating: normalizeRating(p.rating, p.ratingCount).rating,
         ratingCount: normalizeRating(p.rating, p.ratingCount).count,
         condition: p.condition ?? 'new',
+        availability: p.availability ?? 'les-deux',
+        marketplace: p.marketplace ? 1 : 0,
+        sellerName: p.sellerName ?? null,
         price: p.price,
         listPrice: sanitizeListPrice(p.listPrice ?? null, p.price),
         inStock: p.inStock === null || p.inStock === undefined ? null : p.inStock ? 1 : 0,
