@@ -26,7 +26,13 @@ export function db(): Database.Database {
   conn.pragma('journal_mode = WAL');
   conn.pragma('synchronous = NORMAL');   // sûr en WAL, bien plus rapide
   conn.pragma('foreign_keys = ON');
-  conn.pragma('busy_timeout = 10000');   // attendre au lieu d'échouer sur verrou
+  // Attendre au lieu d'échouer sur verrou.
+  //
+  // Porté de 10 s à 60 s après une panne réelle : un calcul de score tient une
+  // transaction d'écriture sur 220 000 lignes, bien plus longue que 10 s. Un
+  // crawl lancé en parallèle mourait sur SQLITE_BUSY au bout de 13 rayons.
+  // Attendre une minute coûte une minute ; échouer coûte la collecte entière.
+  conn.pragma('busy_timeout = 60000');
   conn.pragma('cache_size = -64000');    // 64 Mo de cache page
 
   _db = conn;

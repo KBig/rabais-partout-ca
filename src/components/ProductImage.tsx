@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 
 /**
  * Image produit : bonne résolution, et repli si elle manque.
  *
- * Deux problèmes réels, réglés ensemble.
+ * Trois problèmes réels, réglés ensemble.
  *
  * 1. LA TAILLE. Une première version prenait toujours la plus haute
  *    résolution disponible — du 1500×1500 pour des vignettes de 200 px.
@@ -91,6 +91,24 @@ export function ProductImage({
   const [index, setIndex] = useState(0);
   const [loaded, setLoaded] = useState(false);
 
+  /**
+   * Rattrape les images DEJA EN CACHE.
+   *
+   * C'etait le defaut le plus penible et le plus sournois : en revenant sur une
+   * page deja visitee, les images disparaissaient.
+   *
+   * La cause : l'image est masquee (`opacity-0`) jusqu'au declenchement de
+   * `onLoad`. Or une image en cache est COMPLETE avant meme que React n'attache
+   * l'ecouteur — l'evenement appartient deja au passe, ne se declenche jamais,
+   * et l'image reste invisible indefiniment.
+   *
+   * On interroge donc l'element directement des qu'il existe, au lieu
+   * d'attendre un evenement qui n'aura pas lieu.
+   */
+  const attacher = useCallback((el: HTMLImageElement | null) => {
+    if (el?.complete && el.naturalWidth > 0) setLoaded(true);
+  }, []);
+
   const sources = useMemo(
     () => (src ? candidatesFor(src, targetWidth) : []),
     [src, targetWidth],
@@ -125,12 +143,16 @@ export function ProductImage({
         // La clé force React à remonter un <img> neuf à chaque candidate :
         // sans elle, le navigateur peut conserver l'état d'erreur précédent.
         key={current}
+        ref={attacher}
         src={current}
         alt={alt}
         loading={priority ? 'eager' : 'lazy'}
         fetchPriority={priority ? 'high' : 'auto'}
         decoding="async"
-        onError={() => setIndex((i) => i + 1)}
+        onError={() => {
+          setLoaded(false);
+          setIndex((i) => i + 1);
+        }}
         onLoad={() => setLoaded(true)}
         className={`${className} ${loaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-200`}
       />

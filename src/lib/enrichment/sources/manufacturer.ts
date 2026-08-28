@@ -31,6 +31,28 @@ import type { EnrichmentSource, EnrichedFacts, ProductRef, EnrichmentHttp } from
  * toutes. Chaque marque doit être vérifiée avant d'être activée — d'où le
  * champ `verified` ci-dessous, qui empêche d'interroger un site dont on n'a
  * pas confirmé qu'il expose un prix lisible.
+ *
+ * ----------------------------------------------------------------------------
+ * LE VRAI OBSTACLE : LA DÉCOUVERTE, PAS L'EXTRACTION
+ * ----------------------------------------------------------------------------
+ *
+ * Test de bout en bout sur trois modèles Samsung : aucun prix trouvé. Pourtant
+ * l'extraction JSON-LD fonctionne parfaitement sur une fiche produit DIRECTE
+ * (vérifié : 2 099,99 $ correctement lus).
+ *
+ * L'obstacle est en amont. Les pages de RECHERCHE des fabricants sont rendues
+ * en JavaScript : le numéro de modèle n'apparaît même pas dans le HTML servi,
+ * et aucun lien produit n'est suivable. Passer d'un modèle à l'URL de sa fiche
+ * demande donc, selon le site :
+ *
+ *   - un gabarit d'URL prévisible (le plus simple quand il existe) ;
+ *   - un navigateur sans interface pour exécuter la recherche ;
+ *   - une API officielle.
+ *
+ * Aucune de ces trois voies n'est générique. L'EXTRACTION l'est ; la DÉCOUVERTE
+ * demande du travail par marque. C'est une contrainte du terrain, pas un défaut
+ * d'implémentation — et mieux vaut le savoir que d'activer des marques qui ne
+ * renverront jamais rien.
  */
 
 /** Le prix constructeur fait autorité, mais l'appariement par modèle peut se tromper. */
@@ -64,7 +86,14 @@ export const BRAND_SITES: BrandSite[] = [
     brand: 'samsung',
     name: 'Samsung',
     searchUrl: 'https://www.samsung.com/ca_fr/search/?searchvalue={model}',
-    verified: true,
+    // Passe a false apres test de bout en bout : la page de RECHERCHE Samsung
+    // est rendue en JavaScript, le numero de modele n'apparait meme pas dans
+    // le HTML, et aucun lien produit n'est suivable. L'extraction JSON-LD
+    // fonctionne pourtant tres bien sur une fiche produit DIRECTE.
+    //
+    // Ce qui manque n'est donc pas l'extraction, c'est la DECOUVERTE : passer
+    // d'un numero de modele a l'URL de sa fiche. Voir la note ci-dessous.
+    verified: false,
   },
   { brand: 'lg', name: 'LG', searchUrl: 'https://www.lg.com/ca_fr/search/?search={model}', verified: false },
   { brand: 'dell', name: 'Dell', searchUrl: 'https://www.dell.com/fr-ca/search/{model}', verified: false },

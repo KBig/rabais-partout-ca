@@ -630,41 +630,68 @@ export interface CategoryRank {
 }
 
 /**
- * Position du produit dans sa catégorie, et qui occupe la tête.
+ * Position du produit dans sa catégorie, PAR QUALITÉ.
  *
- * Un score de 43 ne dit rien seul : est-ce bon ? Savoir qu'il est 12e sur 4 000
- * répond à la question, et voir les trois premiers permet de juger si l'écart
- * vaut la différence de prix.
+ * Le classement porte sur `quality_score` — la borne de Wilson sur les avis
+ * clients — et non sur notre score de bonne affaire.
  *
- * Quand le produit fait DÉJÀ partie des trois premiers, on montre les autres
- * membres du podium plutôt que de le lister lui-même — se voir proposer ce
- * qu'on regarde déjà n'apprend rien.
+ * La distinction est essentielle. « 45e sur 2 371 » calculé sur le score de
+ * deal répondait à « est-ce bien soldé aujourd'hui ? », une information déjà
+ * portée par le score affiché juste au-dessus. Ce qu'on veut savoir ici est
+ * différent et durable : **ce produit est-il bon ?** Un excellent moniteur au
+ * prix fort reste un excellent moniteur ; un médiocre en liquidation reste
+ * médiocre.
+ *
+ * Quand le produit fait DÉJÀ partie des premiers, on montre les autres membres
+ * du podium plutôt que de le lister lui-même — se voir proposer ce qu'on
+ * regarde déjà n'apprend rien.
  */
 export function categoryRank(product: DealRow): CategoryRank | null {
   if (!product.categorySlug) return null;
   const conn = db();
 
+  const qualite = conn
+    .prepare<[number], { q: number | null }>(
+      'SELECT quality_score q FROM deal_scores WHERE product_id = ?',
+    )
+    .get(product.id)?.q;
+
+  // Sans évaluation, le produit n'a pas sa place dans un classement de qualité :
+  // le placer arbitrairement serait pire que de ne rien dire.
+  if (qualite == null) return null;
+
+  // Seuls les produits RÉELLEMENT évalués entrent au classement. Compter ceux
+  // dont on ignore la qualité gonflerait le total et rendrait le rang flatteur.
   const meilleurs = conn
     .prepare<[string, number], { n: number }>(
       `SELECT COUNT(*) n FROM deal_scores
-        WHERE is_active = 1 AND category_slug = ? AND score > ?`,
+        WHERE is_active = 1 AND category_slug = ?
+          AND quality_score IS NOT NULL AND quality_score > ?`,
     )
-    .get(product.categorySlug, product.score)!.n;
+    .get(product.categorySlug, qualite)!.n;
 
   const total = conn
     .prepare<[string], { n: number }>(
-      'SELECT COUNT(*) n FROM deal_scores WHERE is_active = 1 AND category_slug = ?',
+      `SELECT COUNT(*) n FROM deal_scores
+        WHERE is_active = 1 AND category_slug = ? AND quality_score IS NOT NULL`,
     )
     .get(product.categorySlug)!.n;
 
   if (total < 5) return null;
 
   const leaders = conn
-    .prepare<[string, number], { id: number; title: string; price: number; score: number }>(
-      `SELECT s.product_id AS id, p.title, s.price, s.score
+    .prepare<
+      [string, number],
+      { id: number; title: string; price: number; score: number }
+    >(
+      `SELECT s.product_id AS id, p.title, s.price, ROUND(s.quality_score * 100) AS score
          FROM deal_scores s JOIN products p ON p.id = s.product_id
-        WHERE s.is_active = 1 AND s.category_slug = ? AND s.product_id != ?
-        ORDER BY s.score DESC LIMIT 3`,
+        WHERE s.is_active = 1 AND s.category_slug = ?
+          AND s.product_id != ? AND s.quality_score IS NOT NULL
+          -- Une qualité estimée sur trop peu d'avis ne mérite pas la tête du
+          -- classement : on exige une preuve réelle.
+          AND COALESCE(p.rating_count, 0) >= 20
+        ORDER BY s.quality_score DESC, p.rating_count DESC LIMIT 3`,
     )
     .all(product.categorySlug, product.id);
 
@@ -684,21 +711,29 @@ function categoryNameOf(slug: string): string {
 }
 
 /**
- * Produits vraiment comparables, pour un face-à-face.
+ * Face-à-face avec des produits AU MOINS AUSSI BONS, du moins cher au plus cher.
  *
- * On reste dans le MÊME groupe de pairs — même format, mêmes caractéristiques
- * déterminantes — et on retient les plus proches en prix. Proposer un modèle
- * deux fois plus cher ne permet pas de juger un rapport qualité-prix ; le
- * comparer à des articles de sa gamme, si.
+ * Une première version retenait les articles les plus proches en PRIX. C'était
+ * la mauvaise question : savoir qu'un produit voisin coûte le même prix
+ * n'apprend rien sur le rapport qualité-prix.
+ *
+ * La question utile est l'inverse : **combien coûte quelque chose d'au moins
+ * aussi bon ?** Si un modèle mieux noté se vend moins cher, la réponse saute
+ * aux yeux ; s'il faut payer 300 $ de plus pour un gain de qualité minime, elle
+ * saute tout autant.
+ *
+ * On reste dans le même groupe de pairs — même format, mêmes caractéristiques
+ * déterminantes — pour que la comparaison porte sur des articles réellement
+ * substituables.
  */
 export function comparables(product: DealRow, limit = 3): DealRow[] {
-  const key = db()
-    .prepare<[number], { peer_key: string | null }>(
-      'SELECT peer_key FROM deal_scores WHERE product_id = ?',
+  const own = db()
+    .prepare<[number], { peer_key: string | null; quality_score: number | null }>(
+      'SELECT peer_key, quality_score FROM deal_scores WHERE product_id = ?',
     )
     .get(product.id);
 
-  if (!key?.peer_key) return [];
+  if (!own?.peer_key) return [];
 
   return db()
     .prepare(
@@ -706,10 +741,18 @@ export function comparables(product: DealRow, limit = 3): DealRow[] {
         WHERE s.peer_key = @key
           AND s.is_active = 1
           AND s.product_id != @id
-        ORDER BY ABS(s.price - @price) ASC
+          -- Au moins aussi bon : une marge de 2 points absorbe le bruit
+          -- d'estimation sans laisser passer de produit franchement inférieur.
+          AND s.quality_score >= @quality
+        ORDER BY s.price ASC
         LIMIT @limit`,
     )
-    .all({ key: key.peer_key, id: product.id, price: product.price, limit })
+    .all({
+      key: own.peer_key,
+      id: product.id,
+      quality: (own.quality_score ?? 0) - 0.02,
+      limit,
+    })
     .map(hydrate);
 }
 

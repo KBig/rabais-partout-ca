@@ -168,10 +168,31 @@ export async function crawl(opts: CrawlOptions): Promise<CrawlResult> {
   let buffer: RawProduct[] = [];
   let error: string | undefined;
 
-  const flush = () => {
+  /**
+   * Écrit le lot courant, en réessayant si la base est momentanément verrouillée.
+   *
+   * SQLite ne tolère qu'un écrivain à la fois. Si un calcul de score tourne en
+   * parallèle, l'écriture attend — et au-delà du `busy_timeout` elle échoue.
+   * Perdre toute une collecte pour un verrou de quelques secondes serait absurde :
+   * on réessaie, en espaçant, et on n'abandonne qu'après plusieurs tentatives.
+   */
+  const flush = async () => {
     if (buffer.length === 0) return;
-    ingestBatch(store.id, buffer, stats);
+    const lot = buffer;
     buffer = [];
+
+    for (let essai = 0; essai < 4; essai++) {
+      try {
+        ingestBatch(store.id, lot, stats);
+        return;
+      } catch (err) {
+        const verrouille =
+          err instanceof Error && /SQLITE_BUSY|database is locked/i.test(err.message);
+        if (!verrouille || essai === 3) throw err;
+        log(`  base verrouillée, nouvelle tentative dans ${(essai + 1) * 5} s…`);
+        await new Promise((r) => setTimeout(r, (essai + 1) * 5000));
+      }
+    }
   };
 
   try {
@@ -180,17 +201,23 @@ export async function crawl(opts: CrawlOptions): Promise<CrawlResult> {
     for await (const product of source) {
       buffer.push(product);
       if (buffer.length >= FLUSH_EVERY) {
-        flush();
+        await flush();
         log(`  … ${stats.seen} produits traités`);
       }
     }
-    flush();
+    await flush();
 
     conn
       .prepare('UPDATE stores SET consecutive_failures = 0, paused_until = NULL WHERE id = ?')
       .run(store.id);
   } catch (err) {
-    flush(); // on ne jette pas ce qui a déjà été récupéré
+    // On ne jette pas ce qui a déjà été récupéré. Si même cette écriture de
+    // secours échoue, on garde l'erreur d'origine, plus informative.
+    try {
+      await flush();
+    } catch {
+      /* rien de plus à tenter ici */
+    }
     error = err instanceof Error ? err.message : String(err);
 
     // Backoff exponentiel : 5 min, 10, 20, 40… plafonné à 6 h.

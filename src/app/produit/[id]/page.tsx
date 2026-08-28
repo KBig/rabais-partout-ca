@@ -119,6 +119,13 @@ export default async function ProductPage({
                 {money(product.median)}
               </span>
             )}
+            {/*
+              Best Buy affiche sur son site un prix INCLUANT les écofrais
+              provinciaux, que son API ne renvoie pas (le champ `ehf` vaut 0).
+              L'écart constaté — 824,99 $ chez nous contre 833,49 $ chez eux —
+              venait entièrement de là. On le signale plutôt que de laisser
+              croire à une donnée périmée.
+            */}
             {product.dropVsMedian && product.dropVsMedian >= 0.03 && (
               <span className="tnum rounded-lg bg-brand/15 px-2 py-1 text-sm font-bold text-brand">
                 −{Math.round(product.dropVsMedian * 100)} % sous le prix habituel
@@ -151,6 +158,10 @@ export default async function ProductPage({
               ))}
             </ul>
           )}
+
+          <p className="text-[11px] text-faint">
+            Prix affiché par le marchand, écofrais provinciaux en sus le cas échéant.
+          </p>
 
           <a
             href={product.url}
@@ -316,9 +327,9 @@ export default async function ProductPage({
         <section>
           <h2 className="mb-1 text-lg font-semibold tracking-tight">Comparatif</h2>
           <p className="mb-3 text-sm text-muted">
-            Les articles les plus proches en prix, a caracteristiques equivalentes. Le
-            score tient compte du rabais reel et de la qualite mesuree : a prix voisin,
-            le mieux note offre le meilleur rapport.
+            Combien coûte quelque chose d&apos;<strong className="text-text">au moins aussi bon</strong> ?
+            Ces articles sont aussi bien notés ou mieux, à caractéristiques équivalentes,
+            du moins cher au plus cher.
           </p>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] border-collapse text-sm">
@@ -326,8 +337,8 @@ export default async function ProductPage({
                 <tr className="border-b border-line text-left text-[11px] uppercase tracking-wide text-faint">
                   <th className="py-2 pr-3 font-medium">Produit</th>
                   <th className="py-2 pr-3 font-medium">Prix</th>
-                  <th className="py-2 pr-3 font-medium">Score</th>
-                  <th className="py-2 font-medium">Qualite</th>
+                  <th className="py-2 pr-3 font-medium">Qualité</th>
+                  <th className="py-2 font-medium">Le recommandent</th>
                 </tr>
               </thead>
               <tbody>
@@ -336,7 +347,9 @@ export default async function ProductPage({
                     <span className="font-semibold text-brand">Celui-ci</span>
                   </td>
                   <td className="tnum py-2.5 pr-3 font-semibold">{money(product.price)}</td>
-                  <td className="tnum py-2.5 pr-3">{Math.round(product.score)}</td>
+                  <td className="tnum py-2.5 pr-3">
+                    {product.rating ? `${product.rating.toFixed(1)}/5` : '—'}
+                  </td>
                   <td className="py-2.5 text-xs text-muted">
                     {product.recommendTotal
                       ? `${Math.round(((product.recommendYes ?? 0) / product.recommendTotal) * 100)} %`
@@ -362,9 +375,13 @@ export default async function ProductPage({
                     </td>
                     <td className="tnum py-2.5 pr-3">
                       <span
-                        className={c.score > product.score ? 'font-semibold text-brand' : ''}
+                        className={
+                          (c.rating ?? 0) > (product.rating ?? 0)
+                            ? 'font-semibold text-brand'
+                            : ''
+                        }
                       >
-                        {Math.round(c.score)}
+                        {c.rating ? `${c.rating.toFixed(1)}/5` : '—'}
                       </span>
                     </td>
                     <td className="py-2.5 text-xs text-muted">
@@ -390,10 +407,12 @@ export default async function ProductPage({
               {rang.rank}
               <sup>{rang.rank === 1 ? 'er' : 'e'}</sup>
             </span>{' '}
-            sur {num(rang.total)} produits en {rang.categoryName}.
+            sur {num(rang.total)} produits évalués en {rang.categoryName},{' '}
+            <strong className="text-text">par qualité</strong> — d&apos;après les avis
+            clients, indépendamment du prix et du rabais.
             {rang.rank <= 3
-              ? ' Il fait partie des mieux classes de sa categorie.'
-              : ' Voici les mieux classes, pour situer.'}
+              ? ' Il fait partie des mieux notés de sa catégorie.'
+              : ' Voici les mieux notés, pour situer.'}
           </p>
           <ol className="space-y-1.5">
             {rang.leaders.map((l, i) => (
@@ -406,7 +425,10 @@ export default async function ProductPage({
                   {l.title}
                 </Link>
                 <span className="tnum shrink-0 text-xs text-faint">{money(l.price)}</span>
-                <span className="tnum w-8 shrink-0 text-right text-xs font-semibold text-text">
+                <span
+                  className="tnum w-8 shrink-0 text-right text-xs font-semibold text-text"
+                  title="Indice de qualité sur 100, calculé sur les avis clients"
+                >
                   {Math.round(l.score)}
                 </span>
               </li>
