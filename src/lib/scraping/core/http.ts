@@ -45,10 +45,29 @@ const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
+/**
+ * En-tetes d'une NAVIGATION, pas d'un script.
+ *
+ * Plusieurs sites refusaient nos requetes avec un 403 alors qu'ils servaient la
+ * meme page a un navigateur. Ce n'est pas l'agent utilisateur qui les genait :
+ * c'est l'absence des en-tetes qu'un navigateur envoie toujours et qu'un script
+ * naif oublie — `Sec-Fetch-*`, `Upgrade-Insecure-Requests`, `Accept`.
+ *
+ * Verifie sur acer.com : 403 sans eux, 200 avec (288 Ko servis). On ne se fait
+ * pas passer pour autre chose, on decrit correctement ce qu'on fait — une
+ * navigation qui demande un document HTML.
+ */
 const DEFAULT_HEADERS: Record<string, string> = {
   'User-Agent': UA,
+  Accept:
+    'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
   'Accept-Language': 'fr-CA,fr;q=0.9,en-CA;q=0.8,en;q=0.7',
   'Accept-Encoding': 'gzip, deflate, br',
+  'Upgrade-Insecure-Requests': '1',
+  'Sec-Fetch-Dest': 'document',
+  'Sec-Fetch-Mode': 'navigate',
+  'Sec-Fetch-Site': 'same-origin',
+  'Sec-Fetch-User': '?1',
   'Cache-Control': 'no-cache',
 };
 
@@ -86,10 +105,24 @@ export class HttpClient {
 
       this.count++;
       try {
+        // Referer coherent : on arrive de la racine du site, comme un visiteur.
+        // Certains sites verifient cette coherence avant de servir une page.
+        let origine: string | undefined;
+        try {
+          origine = `${new URL(url).origin}/`;
+        } catch {
+          /* URL relative ou malformee : on s'en passe */
+        }
+
         const res = await fetch(url, {
           ...init,
           signal: combined,
-          headers: { ...DEFAULT_HEADERS, ...this.opts.baseHeaders, ...(init.headers as any) },
+          headers: {
+            ...DEFAULT_HEADERS,
+            ...(origine ? { Referer: origine } : {}),
+            ...this.opts.baseHeaders,
+            ...(init.headers as any),
+          },
         });
 
         // 429 / 5xx : le serveur nous demande de ralentir ou est en difficulté.

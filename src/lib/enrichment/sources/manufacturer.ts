@@ -137,25 +137,131 @@ export const BRAND_SITES: BrandSite[] = [
   },
 
   // --------------------------------------------------------------------------
-  // Non verifiees. Chacune a ete TESTEE et a echoue pour une raison precise ;
-  // les activer depenserait des requetes pour ne jamais rien rapporter.
+  {
+    brand: 'lenovo',
+    name: 'Lenovo',
+    searchUrl: 'https://www.lenovo.com/ca/fr/search?text={model}',
+    // Un sitemap par pays et par langue ; celui-ci est deja un urlset.
+    sitemapUrl: 'https://www.lenovo.com/sitemap-auto/015-intsitemap-ca-fr.xml',
+    urlFilter: '/ca/fr/p/',
+    // Verifie : fiches /ca/fr/p/... -> prix 27,19 $, 16,82 $ et 13,99 $ lus.
+    // L'echec precedent venait de nos sondages, qui portaient sur des pages
+    // « a propos » et non sur des fiches produit.
+    verified: true,
+  },
+
   // --------------------------------------------------------------------------
-  // LG      : fiches ca_fr servies avec du JSON-LD sans prix.
-  // Dell    : fiche produit servie, 3 blocs, prix charge en JavaScript ensuite.
-  // Acer    : les fiches ca-en repondent 403 a une requete automatisee.
-  // Lenovo  : pages canadiennes sans JSON-LD produit.
-  // Apple   : le sitemap /shop ne renvoie aucune URL exploitable.
-  // Dyson   : sitemap en 403.
+  // NON VERIFIEES — et pourquoi, precisement.
+  //
+  // Chacune a ete testee de bout en bout : sitemap parcouru, VRAIE fiche
+  // produit ouverte, quatre couches d'extraction essayees. Les activer
+  // depenserait des requetes sans jamais rien rapporter.
+  // --------------------------------------------------------------------------
+  //
+  // LG    — 2 210 fiches grand public accessibles, pages de 2,4 Mo servies en
+  //         200, et AUCUN prix dans aucune couche. lg.com/ca_fr informe sur les
+  //         produits et renvoie vers des detaillants : ce n'est pas une
+  //         boutique. Il n'y a rien a extraire, pas meme pour un navigateur.
+  //
+  // Acer  — meme constat, apres avoir leve son 403 (il tenait a des en-tetes de
+  //         navigation manquants, corriges depuis dans le client HTTP).
+  //         894 fiches ca-en servies en 200, aucun prix.
+  //
+  // Dell  — fiches /fr-ca/shop/.../spd/ servies en 200 sur 235 Ko ; les modeles
+  //         echantillonnes sont discontinues et n'affichent plus de prix.
+  //
+  // Apple — le sitemap boutique canadien existe mais renvoie un index VIDE.
+  //
+  // Dyson — 403 persistant, y compris avec des en-tetes complets et un referer.
   { brand: 'lg', name: 'LG', searchUrl: 'https://www.lg.com/ca_fr/search/?search={model}', verified: false },
   { brand: 'dell', name: 'Dell', searchUrl: 'https://www.dell.com/fr-ca/search/{model}', verified: false },
+  { brand: 'acer', name: 'Acer', searchUrl: 'https://www.acer.com/ca-en/search?q={model}', verified: false },
   { brand: 'apple', name: 'Apple', searchUrl: 'https://www.apple.com/ca/fr/search/{model}', verified: false },
-  { brand: 'lenovo', name: 'Lenovo', searchUrl: 'https://www.lenovo.com/ca/fr/search?text={model}', verified: false },
   { brand: 'hp', name: 'HP', searchUrl: 'https://www.hp.com/ca-fr/search?q={model}', verified: false },
   { brand: 'dyson', name: 'Dyson', searchUrl: 'https://www.dysoncanada.ca/fr/search?q={model}', verified: false },
   { brand: 'philips', name: 'Philips', searchUrl: 'https://www.philips.ca/fr/search?q={model}', verified: false },
 ];
 
 const BY_BRAND = new Map(BRAND_SITES.map((b) => [b.brand, b]));
+
+/**
+ * Bornes de plausibilite d'un prix de detail canadien.
+ *
+ * Sert a ecarter les nombres qui traînent dans une page — identifiants,
+ * dimensions, codes postaux — quand on lit une couche moins structuree que le
+ * JSON-LD.
+ */
+const PRIX_MIN = 5;
+const PRIX_MAX = 60_000;
+
+const nombre = (v: unknown): number | null => {
+  const n = typeof v === 'string' ? Number(v.replace(/[^0-9.]/g, '')) : v;
+  return typeof n === 'number' && Number.isFinite(n) && n >= PRIX_MIN && n <= PRIX_MAX ? n : null;
+};
+
+/**
+ * Prix d'une page, lu par COUCHES successives.
+ *
+ * ----------------------------------------------------------------------------
+ * POURQUOI PLUSIEURS COUCHES
+ * ----------------------------------------------------------------------------
+ *
+ * Une premiere version ne lisait que le JSON-LD, et concluait « ce site charge
+ * son prix en JavaScript » des qu'elle ne trouvait rien. C'etait une conclusion
+ * trop rapide : un site publie son prix d'au moins quatre facons, et n'en
+ * choisit qu'une.
+ *
+ *   1. JSON-LD schema.org — la plus fiable, structuree et explicite ;
+ *   2. microdonnees `itemprop="price"` — meme vocabulaire, autre syntaxe ;
+ *   3. balises Open Graph `product:price:amount` — posees pour le partage ;
+ *   4. blobs JSON embarques — l'etat que le JavaScript de la page va lire.
+ *
+ * La quatrieme merite son nom : « charge en JavaScript » ne veut pas dire
+ * « absent de la page ». Le plus souvent, la valeur EST dans le HTML, dans un
+ * `<script>` d'hydratation. Ne pas la lire etait un choix, pas une fatalite.
+ *
+ * On ne descend d'une couche a l'autre que faute de mieux : plus on descend,
+ * plus la valeur est ambigue. On ne va jamais jusqu'au texte visible, ou un
+ * prix barre, un prix de financement et un accessoire se ressemblent trop.
+ */
+export function extractPrice(html: string): { price: number; source: string } | null {
+  const jsonLd = extractJsonLdPrice(html);
+  if (jsonLd) return { price: jsonLd.price, source: 'json-ld' };
+
+  // 2. Microdonnees : l'attribut `content` porte la valeur machine.
+  const micro =
+    html.match(/itemprop=["']price["'][^>]{0,160}content=["']([\d.,]+)["']/i) ??
+    html.match(/content=["']([\d.,]+)["'][^>]{0,160}itemprop=["']price["']/i);
+  const vMicro = micro ? nombre(micro[1].replace(',', '.')) : null;
+  if (vMicro !== null) return { price: vMicro, source: 'microdonnees' };
+
+  // 3. Open Graph.
+  const og =
+    html.match(/<meta[^>]{0,160}(?:og:price:amount|product:price:amount)[^>]{0,160}content=["']([\d.,]+)["']/i) ??
+    html.match(/<meta[^>]{0,160}content=["']([\d.,]+)["'][^>]{0,160}(?:og:price:amount|product:price:amount)/i);
+  const vOg = og ? nombre(og[1].replace(',', '.')) : null;
+  if (vOg !== null) return { price: vOg, source: 'open-graph' };
+
+  // 4. Blob JSON d'hydratation.
+  //
+  // Plusieurs valeurs apparaissent souvent — prix courant, prix barre,
+  // accessoires. On retient la MEDIANE plutot que la premiere : la premiere
+  // depend de l'ordre de serialisation, la mediane resiste aux valeurs isolees.
+  const candidats = [
+    ...html.matchAll(
+      /"(?:price|salePrice|listPrice|finalPrice|currentPrice|sellingPrice|msrp|regularPrice)"\s*:\s*"?(\d{1,6}(?:[.,]\d{1,2})?)"?/gi,
+    ),
+  ]
+    .map((m) => nombre(m[1].replace(',', '.')))
+    .filter((n): n is number => n !== null);
+
+  if (candidats.length > 0) {
+    candidats.sort((a, b) => a - b);
+    return { price: candidats[Math.floor(candidats.length / 2)], source: 'blob-json' };
+  }
+
+  return null;
+}
 
 /**
  * Extrait un prix d'une page HTML via son JSON-LD.
@@ -232,7 +338,7 @@ export const manufacturerPriceSource: EnrichmentSource = {
     if (!url) return null;
 
     const html = await http.getText(url);
-    const found = extractJsonLdPrice(html);
+    const found = extractPrice(html);
     if (!found) return null;
 
     // Garde-fou : un prix constructeur très inférieur au prix détaillant
