@@ -735,8 +735,16 @@ export function scoreAll(now = Date.now()): number {
   const ts = nowIso();
   let count = 0;
 
-  conn.transaction(() => {
-    for (const p of products) {
+  // ECRITURE DECOUPEE.
+  //
+  // SQLite n'accepte qu'un ecrivain a la fois. Une transaction unique sur
+  // 280 000 produits tient le verrou plusieurs minutes — assez pour faire
+  // echouer une collecte lancee en parallele, ce qui est deja arrive et a coute
+  // treize rayons. Des lots courts laissent les deux travaux avancer ensemble.
+  const TAILLE_LOT = 10_000;
+
+  const ecrireLot = conn.transaction((lot: typeof products) => {
+    for (const p of lot) {
       // Le marchand renvoie 0 — et non NULL — pour un produit sans avis. Un
       // `??` prenait donc ce 0 pour une vraie note, et un article hérité de
       // 322 avis se retrouvait affiché « 0,0 sur 5 ». On teste donc la
@@ -812,7 +820,11 @@ export function scoreAll(now = Date.now()): number {
       });
       count++;
     }
-  })();
+  });
+
+  for (let i = 0; i < products.length; i += TAILLE_LOT) {
+    ecrireLot(products.slice(i, i + TAILLE_LOT));
+  }
 
   // Les produits retires du catalogue conservent leur ligne de score : on la
   // marque inactive pour qu'elle sorte du classement. Sans ce menage, l'index

@@ -153,6 +153,20 @@ export function peerKey(
   const cpu = t.match(/\b(?:core\s?)?i([3579])\b|\bryzen\s?([3579])\b|\bultra\s?([3579])\b/);
   if (cpu && !gpu) parts.push(`cpu:${cpu[1] ?? cpu[2] ?? cpu[3]}`);
 
+  // GENERATION, pour les familles numerotees.
+  //
+  // Sans elle, le groupe « telephones | iphone » reunissait 121 appareils de
+  // 105 $ a 850 $ — un iPhone 8 remis a neuf et un iPhone 12 neuf dans le meme
+  // sac. L'ecart etait juste assez faible pour passer le controle de cohesion,
+  // et n'importe quel accessoire tombant dans ce groupe ressortait « -86 % ».
+  //
+  // Une generation est un fait EXPLICITE du titre, pas une deduction : c'est le
+  // meilleur separateur possible pour ces familles.
+  const generation = t.match(
+    /\b(?:iphone|galaxy s|galaxy a|pixel|ipad(?: pro| air)?|xperia|moto g)\s?(\d{1,2})\b/,
+  );
+  if (generation) parts.push(`gen:${generation[1]}`);
+
   // Stockage, pour l'informatique et le mobile.
   const storage = t.match(/\b(\d{3,4})\s*(?:go|gb)\b|\b(\d{1,2})\s*(?:to|tb)\b/);
   if (storage) {
