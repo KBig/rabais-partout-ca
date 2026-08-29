@@ -31,6 +31,7 @@
  */
 import { db, migrate } from '../src/lib/db/index';
 import { topDeals } from '../src/lib/db/queries';
+import { RULES, normalizeSpecText } from '../src/lib/specs';
 
 migrate();
 const conn = db();
@@ -309,6 +310,46 @@ const money = (n: number | null) => (n === null ? '—' : `${n.toFixed(2)} $`);
       titre: `${vides.length} catégories racines sont vides`,
       detail: 'Elles s’affichent comme « à venir ». Normal tant que la source n’est pas branchée.',
       exemples: vides.slice(0, 5).map((v) => v.name),
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Regles de caracteristiques qui ne matchent jamais rien
+// ---------------------------------------------------------------------------
+//
+// Une regex peut etre syntaxiquement valide, passer le typage, passer le build
+// — et ne correspondre a AUCUN produit. C'est arrive deux fois sur ce projet :
+// une regex contenant un caractere de controle invisible, et « pi[3]\\b », dont
+// la frontiere finale exigeait une lettre apres un caractere qui n'en est pas
+// un. Les deux echouaient en silence total.
+//
+// Le seul controle qui les attrape est empirique : confronter chaque regle au
+// catalogue reel et signaler celles qui ne trouvent jamais rien.
+{
+  const echantillon = conn
+    .prepare<[], { title: string; description: string | null }>(
+      `SELECT title, description FROM products
+        WHERE is_active = 1 ORDER BY id LIMIT 40000`,
+    )
+    .all();
+
+  const textes = echantillon.map((p) => normalizeSpecText(`${p.title} ${p.description ?? ''}`));
+  const muettes: string[] = [];
+
+  for (const regle of RULES) {
+    const trouve = textes.some((t) => regle.match.test(t));
+    if (!trouve) muettes.push(`${regle.family} — ${String(regle.match)}`);
+  }
+
+  if (muettes.length > 0) {
+    constats.push({
+      gravite: 'suspect',
+      titre: `${muettes.length} regle(s) de caracteristique ne correspondent a aucun produit`,
+      detail:
+        'Une regle qui ne matche jamais est soit inutile, soit cassee. Les deux ' +
+        'meritent d\'etre regardees : le typage et les tests ne voient ni l\'un ni l\'autre.',
+      exemples: muettes.slice(0, 6),
     });
   }
 }

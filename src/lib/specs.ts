@@ -59,7 +59,7 @@ export interface Spec {
   lowerIsBetter?: boolean;
 }
 
-interface SpecRule {
+export interface SpecRule {
   /**
    * FAMILLE de la caracteristique. Une seule regle par famille est retenue.
    *
@@ -119,7 +119,7 @@ const CATEGORIES_MATIERE: ReadonlySet<string> = new Set([
   'sport', 'fitness',
 ])
 
-const RULES: SpecRule[] = [
+export const RULES: SpecRule[] = [
   // ------------------------------------------------------------------ image
   {
     family: 'resolution',
@@ -510,7 +510,11 @@ const RULES: SpecRule[] = [
   },
   {
     family: 'capacite',
-    match: /\b(\d{1,2}[,.]?\d?)\s*pi[³3]\b/,
+    // Pas de \b final : « ³ » n'est pas un caractere de mot, donc la frontiere
+    // exigerait une lettre juste apres — or il y a une espace. La regle ne
+    // pouvait matcher AUCUN produit, et toutes les capacites en pieds cubes
+    // etaient perdues sans la moindre erreur.
+    match: /\b(\d{1,2}[,.]?\d?)\s*pi[³3](?![a-z0-9])/,
     metric: (m) => Number(m[1].replace(',', '.')),
     unit: 'pi3',
     build: (m) => ({
@@ -764,8 +768,10 @@ const RULES: SpecRule[] = [
   },
 ];
 
-const normalize = (s: string) =>
+export const normalizeSpecText = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+const normalize = normalizeSpecText;
 
 /**
  * Extrait les caractéristiques d'un produit depuis son titre et sa description.

@@ -448,11 +448,15 @@ export default async function ProductPage({
                       </span>
                     </td>
                     <td className="py-2.5 text-xs text-muted">
+                      {/*
+                        Sans donnee de recommandation, on affiche un tiret. Le
+                        repli precedent reaffichait la NOTE, deja presente dans
+                        la colonne d'a cote : deux colonnes montraient « 4,7/5 »
+                        comme si c'etaient deux mesures differentes.
+                      */}
                       {c.recommendTotal
                         ? `${Math.round(((c.recommendYes ?? 0) / c.recommendTotal) * 100)} %`
-                        : c.rating
-                          ? `${c.rating.toFixed(1)}/5`
-                          : '\u2014'}
+                        : '\u2014'}
                     </td>
                   </tr>
                 ))}

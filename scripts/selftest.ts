@@ -425,3 +425,18 @@ test('un Bluetooth sans version annoncee n’est pas classe', () => {
   const avec = specDe('Casque Bluetooth 5.3 sans fil', 'casques', 'bluetooth');
   assert.equal(avec!.rank, 3);
 });
+
+test('une capacite en pieds cubes est bien extraite', () => {
+  // La regle finissait par « pi[3]\b ». « ³ » n'etant pas un caractere de mot,
+  // cette frontiere exigeait une lettre juste apres — or il y a une espace.
+  // Aucun produit ne matchait, sans la moindre erreur nulle part.
+  const s = extractSpecs(
+    'Refrigerateur a deux portes de 31,7 pi³ et 36 po de LG',
+    null,
+    'gros-electro',
+  ).find((x) => x.family === 'capacite');
+
+  assert.ok(s, 'la capacite doit etre reconnue');
+  assert.equal(s!.metric, 31.7);
+  assert.equal(s!.unit, 'pi3');
+});
