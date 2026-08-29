@@ -127,4 +127,16 @@ export interface StoreMeta {
   /** Débit maximal, en requêtes par seconde. Volontairement conservateur. */
   requestsPerSecond: number;
   adapter?: StoreAdapter;
+
+  /**
+   * Pourquoi ce magasin n'est pas collecté, quand ce n'est PAS une question de
+   * temps.
+   *
+   * Afficher « bientôt disponible » sur une enseigne qui nous refuse
+   * explicitement l'accès est une promesse fausse. Certains sites interdisent
+   * la collecte dans leur robots.txt, d'autres opposent un défi anti-robot :
+   * dans les deux cas la réponse est non, et elle se respecte. On le dit
+   * plutôt que de laisser croire à un travail en attente.
+   */
+  blocked?: string;
 }

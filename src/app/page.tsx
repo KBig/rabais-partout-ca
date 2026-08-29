@@ -118,17 +118,31 @@ export default async function DiscoverPage() {
           {stores.map((s) => (
             <div
               key={s.id}
-              className="flex items-center gap-3 rounded-card border border-line bg-surface p-3.5"
+              className="flex items-start gap-3 rounded-card border border-line bg-surface p-3.5"
             >
               <span
-                className="h-8 w-1.5 shrink-0 rounded-full"
-                style={{ background: s.color ?? '#1e2637' }}
+                className="mt-0.5 h-8 w-1.5 shrink-0 rounded-full"
+                style={{ background: s.blocked ? '#3a4254' : (s.color ?? '#1e2637') }}
               />
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{s.name}</p>
-                <p className="text-xs text-faint">
-                  {s.products > 0 ? `${num(s.products)} produits` : 'bientôt disponible'}
-                </p>
+
+                {/*
+                  Trois etats, jamais confondus. « Bientot disponible » sur une
+                  enseigne qui nous refuse l'acces serait une promesse fausse :
+                  ce n'est pas une question de temps, c'est un non.
+                */}
+                {s.products > 0 ? (
+                  <p className="text-xs text-brand">{num(s.products)} produits</p>
+                ) : s.blocked ? (
+                  <p className="text-xs text-faint" title={s.blocked}>
+                    accès refusé par le marchand
+                  </p>
+                ) : (
+                  <p className="text-xs text-faint">
+                    {s.ready ? 'collecte à lancer' : 'bientôt disponible'}
+                  </p>
+                )}
               </div>
             </div>
           ))}

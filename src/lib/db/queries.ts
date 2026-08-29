@@ -1,5 +1,6 @@
 import { db } from './index';
 import { FAMILY_LABEL, FAMILY_ORDER } from '../specs';
+import { STORES } from '../scraping/registry';
 
 /**
  * Couche d'accès aux données du site.
@@ -134,6 +135,8 @@ export interface DealFilters {
 
   /** Borne basse de prix. La borne haute existe deja sous `maxPrice`. */
   minPrice?: number;
+  /** Afficher toutes les variantes d'un meme article, pas seulement une. */
+  includeVariants?: boolean;
   /** Marques retenues, en minuscules. */
   brands?: string[];
   /** Vendeurs tiers retenus. */
@@ -211,6 +214,14 @@ function dealClauses(
   // produit sans baisse mesurable n'a rien a faire dans ce classement, meme en
   // vingtieme page.
   if (f.sort === 'drop') where.push('s.verified_drop >= 0.05');
+
+  // UN representant par groupe de variantes.
+  //
+  // Sans ce filtre, une page de rayon pouvait afficher soixante-neuf bracelets
+  // identiques au meme prix et repousser tout le reste hors ecran. Les autres
+  // variantes restent cherchables et accessibles par leur adresse : elles sont
+  // absentes du classement, pas du site.
+  if (!f.includeVariants) where.push('s.is_variant_lead = 1');
 
   if (f.minPrice !== undefined) {
     where.push('s.price >= @minPrice');
@@ -1142,21 +1153,52 @@ export function siteStats(): SiteStats {
   };
 }
 
-export function activeStores() {
-  return db()
-    .prepare(
-      `SELECT st.id, st.name, st.color, st.homepage, st.enabled,
-              COUNT(p.id) AS products
+export interface StoreRow {
+  id: string;
+  name: string;
+  color: string | null;
+  homepage: string;
+  enabled: number;
+  products: number;
+  /** Le marchand refuse la collecte, et pourquoi. */
+  blocked: string | null;
+  /** Un adaptateur existe : la collecte est possible, faite ou a faire. */
+  ready: boolean;
+}
+
+/**
+ * Les enseignes, avec leur etat REEL.
+ *
+ * Trois etats distincts, et il faut les distinguer : une enseigne collectee,
+ * une enseigne qui attend son adaptateur, et une enseigne qui nous refuse
+ * l'acces. Annoncer « bientot disponible » sur la troisieme serait une
+ * promesse qu'on ne peut pas tenir.
+ */
+export function activeStores(): StoreRow[] {
+  const compte = db()
+    .prepare<[], { id: string; products: number }>(
+      `SELECT st.id, COUNT(p.id) AS products
          FROM stores st
          LEFT JOIN products p ON p.store_id = st.id AND p.is_active = 1
-        GROUP BY st.id ORDER BY products DESC, st.name`,
+        GROUP BY st.id`,
     )
-    .all() as Array<{
-    id: string;
-    name: string;
-    color: string | null;
-    homepage: string;
-    enabled: number;
-    products: number;
-  }>;
+    .all();
+  const parId = new Map(compte.map((r) => [r.id, r.products]));
+
+  return STORES.map((st) => ({
+    id: st.id,
+    name: st.name,
+    color: st.color,
+    homepage: st.homepage,
+    enabled: 1,
+    products: parId.get(st.id) ?? 0,
+    blocked: st.blocked ?? null,
+    ready: Boolean(st.adapter),
+  })).sort(
+    (a, b) =>
+      b.products - a.products ||
+      Number(b.ready) - Number(a.ready) ||
+      Number(Boolean(a.blocked)) - Number(Boolean(b.blocked)) ||
+      a.name.localeCompare(b.name, 'fr'),
+  );
 }

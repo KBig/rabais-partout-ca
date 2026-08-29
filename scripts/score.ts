@@ -9,8 +9,12 @@
  */
 import { migrate } from '../src/lib/db/index';
 import { scoreAll } from '../src/lib/pricing/score';
+import { reconcile, electVariantLeads } from '../src/lib/scraping/core/coherence';
 
 migrate();
 const started = Date.now();
+reconcile((m) => console.log(m));
 const n = scoreAll();
+const masquees = electVariantLeads();
+if (masquees > 0) console.log(`${masquees} variante(s) masquee(s) du classement.`);
 console.log(`${n} scores calculés en ${((Date.now() - started) / 1000).toFixed(1)}s.`);

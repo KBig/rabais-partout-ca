@@ -11,6 +11,7 @@ import { seedReferenceData } from '../src/lib/db/seed';
 import { crawl, retireStaleProducts } from '../src/lib/scraping/core/pipeline';
 import { getStore, liveStores } from '../src/lib/scraping/registry';
 import { scoreAll } from '../src/lib/pricing/score';
+import { reconcile, electVariantLeads } from '../src/lib/scraping/core/coherence';
 import { syncManufacturerReferences } from '../src/lib/enrichment/msrp';
 
 function arg(name: string): string | undefined {
@@ -100,7 +101,16 @@ ${msrp.written} prix de reference constructeur rapproches.`);
   }
 
   console.log('\nCalcul des scores…');
+  // La mise en coherence passe AVANT le calcul des scores : elle corrige des
+  // faits (image manquante, note sans avis) dont le score depend.
+  reconcile((m) => console.log(m));
+
   const scored = scoreAll();
+
+  // Et l'election des representants APRES : le representant d'un groupe de
+  // variantes est celui qui ressort le mieux, donc il faut les scores.
+  const masquees = electVariantLeads();
+  if (masquees > 0) console.log(`${masquees} variante(s) masquee(s) du classement.`);
 
   const secs = ((Date.now() - started) / 1000).toFixed(1);
   console.log(
