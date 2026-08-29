@@ -17,7 +17,7 @@ import { categoryName } from '@/lib/categories';
 import { ScoreBadge, ConfidenceLabel } from '@/components/ScoreBadge';
 import { DiscountBadge } from '@/components/DiscountBadge';
 import { PriceChart } from '@/components/PriceChart';
-import { DealGrid } from '@/components/DealCard';
+import { DealGrid, retourSur } from '@/components/DealCard';
 import { ProductImage } from '@/components/ProductImage';
 import { BackButton } from '@/components/BackButton';
 import {
@@ -33,12 +33,19 @@ export const dynamic = 'force-dynamic';
 
 export default async function ProductPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
   const product = getProduct(Number(id));
   if (!product) notFound();
+
+  // D'ou vient-on ? Le listing transmet son adresse complete, filtres compris,
+  // pour que le fil d'Ariane y ramene au lieu de renvoyer au rayon nu.
+  const retour = retourSur(sp.de);
 
   const history = priceHistory(product.id);
   const competitors = competingOffers(product);
@@ -73,7 +80,10 @@ export default async function ProductPage({
         <span>/</span>
         {product.categorySlug && (
           <>
-            <Link href={`/categories/${product.categorySlug}`} className="hover:text-muted">
+            <Link
+              href={retour ?? `/categories/${product.categorySlug}`}
+              className="hover:text-muted"
+            >
               {categoryName(product.categorySlug)}
             </Link>
             <span>/</span>
@@ -312,9 +322,16 @@ export default async function ProductPage({
             avis », sans qu&apos;aucune règle arbitraire n&apos;ait à être écrite.
           </p>
         ) : (
-          <p className="mt-3 text-xs text-faint">
-            Aucun avis publié pour cet article. Sans eux, la qualité reste inconnue —
-            et le score en tient compte plutôt que de supposer.
+          <p className="mt-3 max-w-3xl text-xs leading-relaxed text-faint">
+            {/*
+              Deux choses differentes, longtemps confondues ici : la NOTE et la
+              RECOMMANDATION. Le marchand publie souvent l'une sans l'autre, et
+              ce texte annoncait « aucun avis publie » juste a cote d'un
+              compteur affichant dix avis.
+            */}
+            {product.ratingCount
+              ? `Ce produit porte ${num(product.ratingCount)} avis, mais le marchand ne publie pas le détail « le recommande / ne le recommande pas ». La borne de Wilson a besoin de ce décompte : sans lui, la qualité repose sur la seule note moyenne, et le score en tient compte.`
+              : 'Aucun avis publié pour cet article. Sans eux, la qualité reste inconnue — et le score en tient compte plutôt que de supposer.'}
           </p>
         )}
       </section>
@@ -416,9 +433,7 @@ export default async function ProductPage({
                   <td className="py-2.5 text-xs text-muted">
                     {product.recommendTotal
                       ? `${Math.round(((product.recommendYes ?? 0) / product.recommendTotal) * 100)} %`
-                      : product.rating
-                        ? `${product.rating.toFixed(1)}/5`
-                        : '\u2014'}
+                      : '\u2014'}
                   </td>
                 </tr>
                 {face.map((c) => (

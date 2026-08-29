@@ -35,11 +35,37 @@ import type { EnrichmentHttp } from '../types';
 /** Un sitemap peut renvoyer vers d'autres sitemaps. On limite la descente. */
 const MAX_DEPTH = 3;
 
-/** Au-delà, on cesse de suivre : ce n'est plus un catalogue produit. */
+/**
+ * Au-dela, on cesse de suivre : ce n'est plus un catalogue produit.
+ *
+ * Le plafond est plus haut quand un filtre de region est fourni. Sans filtre,
+ * 40 sitemaps suffisent a couvrir un catalogue. Avec filtre, le travail est
+ * deja borne par la region : ASUS publie 11 619 sous-sitemaps, dont 166 pour
+ * le Canada — s'arreter a 40 laisserait les trois quarts de ses fiches
+ * canadiennes de cote.
+ */
 const MAX_SITEMAPS = 40;
+const MAX_SITEMAPS_FILTRE = 220;
 
 /** L'index est reconstruit passé ce délai. Un catalogue bouge lentement. */
 const INDEX_TTL_DAYS = 14;
+
+/**
+ * Pages a ne PAS indexer.
+ *
+ * Un fabricant publie, pour un meme modele, une fiche produit ET une page de
+ * support. Les deux portent la reference, mais seule la premiere affiche un
+ * prix.
+ *
+ * Pire : l'adresse d'une page de support EST le numero de modele
+ * (« /support/model/QN65QN90DAFXZC/ »), tandis que celle de la fiche produit
+ * l'entoure de mots descriptifs. Le rapprochement retenant la correspondance la
+ * plus courte — la plus precise, en general — la page de support gagnait
+ * systematiquement. Mesure chez Samsung : 10 347 des 14 206 URL indexees, soit
+ * 73 % de l'index, et AUCUN prix extrait.
+ */
+const PAGES_SANS_PRIX =
+  /\/(support|soutien|manual|manuel|driver|pilote|download|telecharg|faq|service|warranty|garantie|how-to|community|forum|register|repair|contact)(\/|$|-)/i;
 
 /** Clé de rapprochement : « QN65QN80HAFXZC » et « qn65-qn80hafxzc » se rejoignent. */
 export const modelKey = (model: string) => model.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -58,8 +84,9 @@ async function collectUrls(
   const vus = new Set<string>();
   const aVisiter = [{ url: root, depth: 0 }];
   const pages: string[] = [];
+  const plafond = garder ? MAX_SITEMAPS_FILTRE : MAX_SITEMAPS;
 
-  while (aVisiter.length > 0 && vus.size < MAX_SITEMAPS) {
+  while (aVisiter.length > 0 && vus.size < plafond) {
     const { url, depth } = aVisiter.shift()!;
     if (vus.has(url)) continue;
     vus.add(url);
@@ -137,6 +164,9 @@ export async function buildSitemapIndex(
     conn.prepare('DELETE FROM manufacturer_urls WHERE brand = ?').run(brand);
 
     for (const url of urls) {
+      // Une page d'assistance porte la reference mais ne vend rien.
+      if (PAGES_SANS_PRIX.test(url)) continue;
+
       // Le dernier segment porte le slug de la fiche, modèle compris.
       const segment = url.replace(/\/+$/, '').split('/').pop() ?? '';
       const cle = modelKey(segment);

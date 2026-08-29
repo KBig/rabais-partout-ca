@@ -26,6 +26,12 @@ export default async function SearchPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const sp = await searchParams;
+
+  // Adresse complete de la recherche : la fiche produit doit y ramener.
+  const qsRetour = new URLSearchParams(
+    Object.entries(sp).filter((e): e is [string, string] => Boolean(e[1])),
+  ).toString();
+  const retour = qsRetour ? `/recherche?${qsRetour}` : '/recherche';
   const q = (sp.q ?? '').trim();
   const sort = (sp.sort ?? 'pertinence') as string;
   // La recherche affiche TOUS les états par défaut, contrairement aux listings.
@@ -111,7 +117,7 @@ export default async function SearchPage({
 
           {result.rows.length > 0 ? (
             <>
-              <DealGrid deals={result.rows} />
+              <DealGrid deals={result.rows} retour={retour} />
               <Pagination page={page} pages={pages} searchParams={sp} />
             </>
           ) : (

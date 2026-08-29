@@ -13,7 +13,32 @@ import { ProductImage } from './ProductImage';
  * précisément le cas où le marchand exagère — et c'est là que le site apporte
  * sa valeur.
  */
-export function DealCard({ deal, priority = false }: { deal: DealRow; priority?: boolean }) {
+/**
+ * Adresse de retour, transportee dans le lien.
+ *
+ * Une fiche produit ignore tout des filtres qui l'ont fait apparaitre. Son fil
+ * d'Ariane renvoyait donc au rayon NU, effacant une selection parfois longue a
+ * composer — et c'est le lien le plus evident a cliquer pour « revenir ».
+ *
+ * On accepte uniquement un chemin interne. Une valeur venue de l'exterieur ne
+ * doit jamais pouvoir transformer ce lien en redirection ailleurs.
+ */
+export function retourSur(valeur: string | undefined): string | null {
+  if (!valeur) return null;
+  if (!valeur.startsWith('/') || valeur.startsWith('//')) return null;
+  return valeur;
+}
+
+export function DealCard({
+  deal,
+  priority = false,
+  retour,
+}: {
+  deal: DealRow;
+  priority?: boolean;
+  /** Listing d'origine, restitue au fil d'Ariane de la fiche. */
+  retour?: string;
+}) {
   // La baisse verifiee couvre les deux mesures : dans le temps quand nous avons
   // de l'historique, face aux produits equivalents sinon. Se limiter a la
   // premiere revenait a n'afficher un rabais plein que sur 872 produits sur
@@ -26,7 +51,11 @@ export function DealCard({ deal, priority = false }: { deal: DealRow; priority?:
 
   return (
     <Link
-      href={`/produit/${deal.id}`}
+      href={
+        retour
+          ? `/produit/${deal.id}?de=${encodeURIComponent(retour)}`
+          : `/produit/${deal.id}`
+      }
       className="group flex flex-col overflow-hidden rounded-card border border-line bg-surface transition-all hover:border-line/80 hover:bg-raised"
     >
       <div className="relative aspect-[4/3] overflow-hidden bg-white/[0.03]">
@@ -119,11 +148,11 @@ export function DealCard({ deal, priority = false }: { deal: DealRow; priority?:
  */
 const EAGER_COUNT = 10;
 
-export function DealGrid({ deals }: { deals: DealRow[] }) {
+export function DealGrid({ deals, retour }: { deals: DealRow[]; retour?: string }) {
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
       {deals.map((d, i) => (
-        <DealCard key={d.id} deal={d} priority={i < EAGER_COUNT} />
+        <DealCard key={d.id} deal={d} priority={i < EAGER_COUNT} retour={retour} />
       ))}
     </div>
   );

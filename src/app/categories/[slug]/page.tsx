@@ -61,6 +61,13 @@ export default async function CategoryPage({
   const parent = category.parent ? CATEGORY_BY_SLUG.get(category.parent) : null;
   const basePath = `/categories/${slug}`;
 
+  // Adresse complete du listing, filtres compris : chaque fiche la recoit pour
+  // que son fil d'Ariane ramene ICI, et non au rayon vide.
+  const qs = new URLSearchParams(
+    Object.entries(sp).filter((e): e is [string, string] => Boolean(e[1])),
+  ).toString();
+  const retour = qs ? `${basePath}?${qs}` : basePath;
+
   return (
     <div className="space-y-6">
       <header>
@@ -128,7 +135,7 @@ export default async function CategoryPage({
         <div className="min-w-0 space-y-6">
           {deals.length > 0 ? (
             <>
-              <DealGrid deals={deals} />
+              <DealGrid deals={deals} retour={retour} />
               <Pagination page={page} pages={pages} basePath={basePath} searchParams={sp} />
             </>
           ) : (

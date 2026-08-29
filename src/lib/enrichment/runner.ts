@@ -80,7 +80,24 @@ export function selectForEnrichment(
          LEFT JOIN deal_scores s        ON s.product_id = p.id
         WHERE p.store_id = ?
           AND p.is_active = 1
-          AND (p.brand IS NULL OR p.rating IS NULL OR COALESCE(p.rating_count, 0) < 20)
+          AND (
+            -- Il manque une information de base.
+            p.brand IS NULL OR p.rating IS NULL OR COALESCE(p.rating_count, 0) < 20
+
+            -- OU tout est la pour aller chercher le prix du fabricant, et on ne
+            -- l'a pas encore fait.
+            --
+            -- Cette seconde branche manquait, et son absence annulait toute la
+            -- chaine : le critere « la marque est ABSENTE » avait ete ecrit
+            -- quand la marque etait justement ce qu'il fallait remplir. Le prix
+            -- constructeur exige l'inverse — que la marque soit PRESENTE — si
+            -- bien que la file excluait exactement les produits capables d'en
+            -- obtenir un. Zero reference n'est jamais tombee, avec pourtant une
+            -- machinerie complete derriere.
+            OR (p.brand IS NOT NULL AND p.brand <> ''
+                AND p.model IS NOT NULL AND p.model <> ''
+                AND NOT EXISTS (SELECT 1 FROM price_references r WHERE r.product_id = p.id))
+          )
           AND (e.product_id IS NULL
                OR (e.status != 'ok' AND e.attempts < 3)
                OR e.enriched_at < ?)

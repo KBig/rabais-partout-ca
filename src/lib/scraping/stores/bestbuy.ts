@@ -172,7 +172,17 @@ interface BbSearchResponse {
  */
 function extractModel(name: string): string | null {
   const m = name.match(/\(([A-Z0-9][A-Z0-9._\-\/]{3,})\)/i);
-  return m ? m[1] : null;
+  if (!m) return null;
+  const brut = m[1];
+
+  // Une reference melange TOUJOURS lettres et chiffres. Sans ce controle, les
+  // parentheses de « Galaxy Tab S10+ (Plus) » ou « ThinkPad L13 (2024) »
+  // donnaient « Plus » et « 2024 » comme numeros de modele — de quoi
+  // interroger le mauvais fabricant, ou personne.
+  if (!/[A-Z]/i.test(brut) || !/\d/.test(brut)) return null;
+  if (/^(19|20)\d{2}$/.test(brut)) return null;
+
+  return brut;
 }
 
 /**
