@@ -52,6 +52,20 @@ export default async function ProductPage({
   const alternatives = betterAlternatives(product);
   const face = comparables(product);
   const pdsf = manufacturerReference(product.id);
+
+  // La fiche montre la qualite que le SCORE a utilisee, pas celle de l'unite.
+  //
+  // Une unite boite ouverte porte ses propres 14 avis alors que le meme modele
+  // en neuf en compte 44 : le moteur retient le plus grand echantillon, ce qui
+  // est le bon choix. Afficher les 14 a cote d'une raison citant 44 donnait
+  // trois nombres differents sur le meme ecran, tous exacts, et l'impression
+  // d'un systeme incoherent.
+  const noteUtilisee = product.qualityRating ?? product.rating;
+  const avisUtilises = product.qualityCount ?? product.ratingCount;
+  const qualiteHeritee =
+    product.qualityCount !== null &&
+    product.ratingCount !== null &&
+    product.qualityCount !== product.ratingCount;
   const rang = categoryRank(product);
   const composantes = analyzeComponents(
     product.title,
@@ -305,15 +319,23 @@ export default async function ProductPage({
         <div className="grid gap-3 sm:grid-cols-3">
           <Fact
             label="Note moyenne"
-            value={product.rating ? `${product.rating.toFixed(2)} / 5` : 'non noté'}
+            value={noteUtilisee ? `${noteUtilisee.toFixed(2)} / 5` : 'non noté'}
           />
-          <Fact label="Nombre d'avis" value={num(product.ratingCount)} />
+          <Fact label="Nombre d'avis" value={num(avisUtilises)} />
           <Fact
             label="Le recommandent"
             value={recommendPct !== null ? pct(recommendPct) : 'inconnu'}
             accent={recommendPct !== null && recommendPct > 0.9}
           />
         </div>
+        {qualiteHeritee && (
+          <p className="mt-2 text-[11px] text-faint">
+            Ces avis portent sur le même modèle, toutes unités confondues
+            {product.ratingCount ? ` — cette unité-ci en compte ${num(product.ratingCount)}` : ''}.
+            Le plus grand échantillon est le plus fiable.
+          </p>
+        )}
+
         {product.recommendTotal ? (
           <p className="mt-3 max-w-3xl text-xs leading-relaxed text-faint">
             La qualité est évaluée par la borne inférieure de Wilson sur{' '}
@@ -428,7 +450,7 @@ export default async function ProductPage({
                   </td>
                   <td className="tnum py-2.5 pr-3 font-semibold">{money(product.price)}</td>
                   <td className="tnum py-2.5 pr-3">
-                    {product.rating ? `${product.rating.toFixed(1)}/5` : '—'}
+                    {noteUtilisee ? `${noteUtilisee.toFixed(1)}/5` : '—'}
                   </td>
                   <td className="py-2.5 text-xs text-muted">
                     {product.recommendTotal
@@ -454,12 +476,14 @@ export default async function ProductPage({
                     <td className="tnum py-2.5 pr-3">
                       <span
                         className={
-                          (c.rating ?? 0) > (product.rating ?? 0)
+                          (c.qualityRating ?? c.rating ?? 0) > (noteUtilisee ?? 0)
                             ? 'font-semibold text-brand'
                             : ''
                         }
                       >
-                        {c.rating ? `${c.rating.toFixed(1)}/5` : '—'}
+                        {c.qualityRating ?? c.rating
+                          ? `${(c.qualityRating ?? c.rating)!.toFixed(1)}/5`
+                          : '—'}
                       </span>
                     </td>
                     <td className="py-2.5 text-xs text-muted">

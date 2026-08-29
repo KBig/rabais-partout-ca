@@ -1,6 +1,11 @@
 import type { StoreMeta } from './types';
 import { bestBuyAdapter } from './stores/bestbuy';
 import { neweggAdapter } from './stores/newegg';
+import {
+  createShopifyAdapter,
+  REGLES_MAISON,
+  IGNORER_MAISON,
+} from './stores/shopify';
 
 /**
  * Registre des sources de prix.
@@ -130,6 +135,28 @@ export const STORES: StoreMeta[] = [
     homepage: 'https://www.thebrick.com',
     color: '#D6001C',
     requestsPerSecond: 0.75,
+    adapter: createShopifyAdapter({
+      id: 'brick-ca',
+      base: 'https://www.thebrick.com',
+      rules: REGLES_MAISON,
+      ignore: IGNORER_MAISON,
+    }),
+  },
+  {
+    id: 'leons-ca',
+    name: "Leon's",
+    kind: 'retailer',
+    country: 'CA',
+    currency: 'CAD',
+    homepage: 'https://www.leons.ca',
+    color: '#E31837',
+    requestsPerSecond: 0.75,
+    adapter: createShopifyAdapter({
+      id: 'leons-ca',
+      base: 'https://www.leons.ca',
+      rules: REGLES_MAISON,
+      ignore: IGNORER_MAISON,
+    }),
   },
   {
     id: 'tanguay-ca',

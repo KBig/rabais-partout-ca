@@ -13,6 +13,7 @@ export const metadata: Metadata = {
 const NAV = [
   { href: '/', label: 'Découvrir' },
   { href: '/categories', label: 'Catégories' },
+  { href: '/magasins', label: 'Magasins' },
   { href: '/recherche', label: 'Recherche' },
 ];
 

@@ -26,6 +26,16 @@ export interface DealRow {
   condition: string;
   /** Baisse mesuree par nous : dans le temps, ou face aux equivalents. */
   verifiedDrop: number;
+  /**
+   * Note et volume d'avis EFFECTIVEMENT retenus par le score.
+   *
+   * Une unite boite ouverte porte ses propres 14 avis alors que le meme modele
+   * en neuf en compte 44 : le moteur garde le plus grand echantillon. La fiche
+   * doit montrer ce nombre-la, sans quoi trois chiffres differents apparaissent
+   * sur le meme ecran sans qu'aucun ne soit faux.
+   */
+  qualityRating: number | null;
+  qualityCount: number | null;
   availability: string;
   marketplace: number;
   sellerName: string | null;
@@ -70,6 +80,7 @@ const SELECT_DEAL = `
          s.score, s.confidence, s.drop_vs_median AS dropVsMedian,
          s.is_lowest_ever AS isLowestEver, s.median_90d AS median,
          s.verified_drop AS verifiedDrop,
+         s.quality_rating AS qualityRating, s.quality_count AS qualityCount,
          s.min_ever AS minEver, s.max_ever AS maxEver,
          s.days_of_history AS daysOfHistory, s.reasons,
          e.recommend_yes AS recommendYes, e.recommend_total AS recommendTotal,
@@ -137,6 +148,13 @@ export interface DealFilters {
   minPrice?: number;
   /** Afficher toutes les variantes d'un meme article, pas seulement une. */
   includeVariants?: boolean;
+  /**
+   * Enseignes retenues.
+   *
+   * Distinct de `store`, qui fixe le contexte d'une page entiere (« je suis
+   * chez Canac »). Celui-ci est un filtre que l'utilisateur coche et decoche.
+   */
+  stores?: string[];
   /** Marques retenues, en minuscules. */
   brands?: string[];
   /** Vendeurs tiers retenus. */
@@ -189,6 +207,13 @@ function dealClauses(
   if (f.store) {
     where.push('s.store_id = @store');
     params.store = f.store;
+  }
+  if (f.stores?.length) {
+    const cles = f.stores.map((v, i) => {
+      params[`st${i}`] = v;
+      return `@st${i}`;
+    });
+    where.push(`s.store_id IN (${cles.join(', ')})`);
   }
   if (f.condition === 'used') where.push("s.condition != 'new'");
   else if (f.condition !== 'all') where.push("s.condition = 'new'");
@@ -480,14 +505,28 @@ export function priceHistory(productId: number): HistoryPoint[] {
 export function competingOffers(product: DealRow): DealRow[] {
   if (!product.model) return [];
   const key = product.model.toUpperCase().replace(/[-\s]/g, '');
+
+  // UN prix par marchand : le meilleur.
+  //
+  // Un meme modele apparait souvent plusieurs fois chez un marchand — vendeurs
+  // tiers, lots, conditionnements. La fiche affichait alors deux lignes au
+  // titre identique a 529,99 $ et 669,98 $, ce qui ressemble a une erreur. La
+  // question posee est « combien ailleurs ? » : la reponse est le meilleur
+  // prix de chaque enseigne.
   return db()
     .prepare(
       `${SELECT_DEAL}
         WHERE p.store_id != ? AND p.is_active = 1
           AND REPLACE(REPLACE(UPPER(p.model), '-', ''), ' ', '') = ?
+          AND p.current_price = (
+            SELECT MIN(q.current_price) FROM products q
+             WHERE q.store_id = p.store_id AND q.is_active = 1
+               AND REPLACE(REPLACE(UPPER(q.model), '-', ''), ' ', '') = ?
+          )
+        GROUP BY p.store_id
         ORDER BY p.current_price ASC LIMIT 6`,
     )
-    .all(product.storeId, key)
+    .all(product.storeId, key, key)
     .map(hydrate);
 }
 
@@ -632,6 +671,8 @@ export interface CategoryFacets {
   brands: FacetValue[];
   sellers: FacetValue[];
   specs: SpecFacet[];
+  /** Enseignes presentes dans cette selection, avec leur nombre d'articles. */
+  storeFacets: FacetValue[];
 }
 
 /**
@@ -783,12 +824,30 @@ export function categoryFacets(f: DealFilters = {}): CategoryFacets {
     )
     .get(clausesPrix.params);
 
+  // Les enseignes se comptent sans leur propre filtre, comme les autres
+  // criteres : sinon cocher « Brick » ferait disparaitre « Best Buy » de la
+  // liste, et le choix deviendrait irreversible.
+  const clausesMagasin = dealClauses({ ...f, stores: undefined }, true);
+  const storeFacets = conn
+    .prepare<Record<string, unknown>, { label: string; value: string; count: number }>(
+      `SELECT st.name AS label, st.id AS value, COUNT(*) AS count
+         FROM deal_scores s
+         JOIN products p ON p.id = s.product_id
+         JOIN stores st ON st.id = s.store_id
+        WHERE ${clausesMagasin.where.join(' AND ')}
+        GROUP BY st.id
+        ORDER BY count DESC`,
+    )
+    .all(clausesMagasin.params)
+    .map((r) => ({ ...r, metric: null }));
+
   const data: CategoryFacets = {
     priceMin: Math.floor(bornes?.mini ?? 0),
     priceMax: Math.ceil(bornes?.maxi ?? 0),
     brands,
     sellers,
     specs,
+    storeFacets,
   };
 
   if (!filtresActifs) {
@@ -1097,7 +1156,9 @@ export interface CategoryCount {
  * correct, mais 110 ms sur un catalogue de 200 000 lignes, payés sur deux pages
  * du site.
  */
-export function categoriesWithCounts(): CategoryCount[] {
+export function categoriesWithCounts(storeId?: string): CategoryCount[] {
+  // Restreint a une enseigne quand on demande « que vend Canac ? ». Sans
+  // argument, le comportement reste celui du catalogue entier.
   return db()
     .prepare(
       `WITH totaux AS (
@@ -1106,6 +1167,7 @@ export function categoriesWithCounts(): CategoryCount[] {
                 MAX(score)    AS bestScore
            FROM deal_scores
           WHERE is_active = 1 AND category_slug IS NOT NULL
+            AND (@store IS NULL OR store_id = @store)
           GROUP BY category_slug
        )
        SELECT c.slug, c.name, c.parent_slug AS parentSlug, c.icon,
@@ -1115,7 +1177,7 @@ export function categoriesWithCounts(): CategoryCount[] {
          LEFT JOIN totaux t ON t.slug = c.slug
         ORDER BY c.sort_order`,
     )
-    .all() as CategoryCount[];
+    .all({ store: storeId ?? null }) as CategoryCount[];
 }
 
 export interface SiteStats {

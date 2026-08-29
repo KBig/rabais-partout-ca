@@ -122,7 +122,11 @@ export function gammeFromDistribution(spec: Spec, d: Distribution): { gamme: Gam
 
   const gamme: Gamme = haut ? 'premium' : bon ? 'haut' : faible ? 'entree' : 'milieu';
 
-  const mediane = d.p50 % 1 === 0 ? d.p50 : d.p50.toFixed(1);
+  // Une decimale suffit pour des pouces ou des litres, pas pour des
+  // millisecondes : « 0,03 ms » s'affichait « 0.0 ms », ce qui ne veut rien
+  // dire. On garde assez de chiffres pour que la valeur reste reconnaissable.
+  const mediane =
+    d.p50 % 1 === 0 ? d.p50 : d.p50 < 1 ? d.p50.toFixed(2) : d.p50.toFixed(1);
   return {
     gamme,
     basis: `Médiane de la catégorie : ${mediane} ${spec.unit ?? ''} (${d.n} produits comparés)`.trim(),

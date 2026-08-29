@@ -142,6 +142,9 @@ export interface ScoreResult {
   isLowestEver: boolean;
   daysOfHistory: number;
   qualityScore: number;
+  /** Note et volume d'avis EFFECTIVEMENT utilises — herites, le cas echeant. */
+  qualityRating: number | null;
+  qualityCount: number | null;
   claimedDiscount: number;
   fakeDealPenalty: number;
   median: number;
@@ -449,7 +452,23 @@ export function scoreProduct(input: ScoreInput): ScoreResult | null {
       ? contributions.reduce((sum, [v, w]) => sum + v * w, 0) / totalWeight
       : 0;
 
-  const dealSignal = clamp(valueSignalRaw - fakeDealPenalty);
+  // La penalite AMORTIT le signal, elle ne l'annule pas.
+  //
+  // Elle neutralise deja le signal du marchand quelques lignes plus haut —
+  // c'est sa raison d'etre. La soustraire une seconde fois du signal FUSIONNE
+  // ecrasait aussi l'historique, les pairs et la reference, qui n'ont rien a
+  // voir avec l'exageration du vendeur.
+  //
+  // Cas reel : un moniteur QD-OLED 240 Hz note 5,0 sur 5 par 44 avis, vendu
+  // 559,99 $ quand ses equivalents tournent autour du meme prix, ressortait a
+  // 0 sur 100 « Faible » — parce que le marchand avait affiche un regulier de
+  // 799,99 $. Le produit etait puni pour le comportement du vendeur.
+  //
+  // L'amortissement reste severe (jusqu'a -60 %) : un prix de reference
+  // fabrique reste un signal defavorable sur l'offre. Il ne fait simplement
+  // plus disparaitre les mesures independantes.
+  const MAX_AMORTISSEMENT = 0.6;
+  const dealSignal = clamp(valueSignalRaw * (1 - MAX_AMORTISSEMENT * fakeDealPenalty));
 
   // --- 5. Porte de qualité (MULTIPLICATIVE, pas additive) ------------------
   // Un mauvais produit ne peut structurellement pas atteindre le sommet, quel
@@ -552,6 +571,10 @@ export function scoreProduct(input: ScoreInput): ScoreResult | null {
     isLowestEver,
     daysOfHistory: stats.daysObserved,
     qualityScore: quality01,
+    // Ce que le score a EFFECTIVEMENT utilise : herite du modele, le cas
+    // echeant. La fiche doit montrer ces nombres, pas ceux de l'unite.
+    qualityRating: rating,
+    qualityCount: ratingCount,
     claimedDiscount,
     fakeDealPenalty,
     median: stats.median,
@@ -697,13 +720,15 @@ export function scoreAll(now = Date.now()): number {
     INSERT INTO deal_scores (
       product_id, score, confidence, drop_vs_median, verified_drop, price_percentile,
       is_lowest_ever, days_of_history, quality_score, claimed_discount,
-      fake_deal_penalty, median_90d, min_ever, max_ever, reasons, computed_at,
+      fake_deal_penalty, quality_rating, quality_count,
+      median_90d, min_ever, max_ever, reasons, computed_at,
       peer_percentile, peer_below_median, peer_size, peer_median,
       is_active, condition, category_slug, store_id, price, peer_key
     ) VALUES (
       @id, @score, @confidence, @drop, @verifiedDrop, @percentile,
       @lowest, @days, @quality, @claimed,
-      @penalty, @median, @minEver, @maxEver, @reasons, @ts,
+      @penalty, @qualityRating, @qualityCount,
+      @median, @minEver, @maxEver, @reasons, @ts,
       @peerPercentile, @peerBelowMedian, @peerSize, @peerMedian,
       1, @condition, @categorySlug, @storeId, @price, @peerKey
     )
@@ -717,6 +742,8 @@ export function scoreAll(now = Date.now()): number {
       quality_score = excluded.quality_score,
       claimed_discount = excluded.claimed_discount,
       fake_deal_penalty = excluded.fake_deal_penalty,
+      quality_rating = excluded.quality_rating,
+      quality_count = excluded.quality_count,
       median_90d = excluded.median_90d, min_ever = excluded.min_ever,
       max_ever = excluded.max_ever, reasons = excluded.reasons,
       computed_at = excluded.computed_at,
@@ -803,6 +830,8 @@ export function scoreAll(now = Date.now()): number {
         quality: res.qualityScore,
         claimed: res.claimedDiscount,
         penalty: res.fakeDealPenalty,
+        qualityRating: res.qualityRating,
+        qualityCount: res.qualityCount,
         median: res.median,
         minEver: res.minEver,
         maxEver: res.maxEver,

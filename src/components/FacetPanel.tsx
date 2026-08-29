@@ -118,10 +118,12 @@ export function FacetPanel({
 }) {
   const marques = parseList(searchParams.brand);
   const vendeurs = parseList(searchParams.seller);
+  const enseignes = parseList(searchParams.store);
 
   const nbActifs =
     marques.length +
     vendeurs.length +
+    enseignes.length +
     Object.entries(searchParams).filter(
       ([k, v]) => k.startsWith(FACET_PREFIX) && v,
     ).length +
@@ -134,7 +136,7 @@ export function FacetPanel({
     for (const [k, v] of Object.entries(searchParams)) {
       const estFiltre =
         k.startsWith(FACET_PREFIX) ||
-        ['brand', 'seller', 'pmin', 'pmax', 'page'].includes(k);
+        ['brand', 'seller', 'store', 'pmin', 'pmax', 'page'].includes(k);
       if (v && !estFiltre) next.set(k, v);
     }
     const qs = next.toString();
@@ -201,6 +203,25 @@ export function FacetPanel({
           </form>
 
           <div className="mt-3">
+            {/*
+              Le magasin passe en premier : « je vais chez Canac cet
+              apres-midi » est une contrainte plus forte qu'une marque ou une
+              caracteristique. Masque quand une seule enseigne est presente —
+              un filtre a une seule valeur ne filtre rien.
+            */}
+            {facets.storeFacets.length > 1 && (
+              <Bloc titre="Magasin" ouvert>
+                {facets.storeFacets.map((m) => (
+                  <Choix
+                    key={m.value}
+                    v={m}
+                    actif={enseignes.includes(m.value)}
+                    href={toggleHref(basePath, searchParams, 'store', m.value)}
+                  />
+                ))}
+              </Bloc>
+            )}
+
             {facets.brands.length > 1 && (
               <Bloc titre="Marque" ouvert={marques.length > 0}>
                 {facets.brands.map((b) => (
@@ -277,6 +298,7 @@ export function filtersFromParams(params: Params) {
   return {
     brands: parseList(params.brand),
     sellers: parseList(params.seller),
+    stores: parseList(params.store),
     specs,
     minPrice: nombre(params.pmin),
     maxPrice: nombre(params.pmax),

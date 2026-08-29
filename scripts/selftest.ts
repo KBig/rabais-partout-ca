@@ -440,3 +440,34 @@ test('une capacite en pieds cubes est bien extraite', () => {
   assert.equal(s!.metric, 31.7);
   assert.equal(s!.unit, 'pi3');
 });
+
+test('un bon produit n’est pas puni pour le mensonge du marchand', () => {
+  // Cas reel : moniteur QD-OLED 240 Hz, note 5,0 sur 5 par 44 avis, vendu
+  // 560 $ quand ses equivalents tournent au meme niveau. Le marchand affiche
+  // un « regulier » de 800 $, invente. Le score tombait a 0 sur 100 « Faible » :
+  // la penalite etait soustraite du signal FUSIONNE, ecrasant les mesures
+  // independantes qui n’ont rien a voir avec l’exageration du vendeur.
+  const r = scoreProduct({
+    ...baseInput,
+    currentPrice: 560,
+    listPrice: 800,
+    rating: 5,
+    ratingCount: 44,
+    recommendYes: 44,
+    recommendTotal: 44,
+    points: [point(0.02, 560)],
+    // p90 a 640 : le « regulier » de 800 $ depasse ce que coute presque tout
+    // le marche equivalent — c'est exactement ce qui declenche la detection.
+    peer: peer({ size: 60, p50: 580, p90: 640, median: 580, belowMedian: 0.03, percentile: 0.45 }),
+  })!;
+
+  assert.ok(r.fakeDealPenalty > 0, 'le regulier invente doit rester detecte');
+  assert.ok(
+    r.score > 5,
+    `un produit excellent au prix du marche ne vaut pas zero (obtenu ${r.score.toFixed(1)})`,
+  );
+  assert.ok(
+    r.score < 45,
+    `sans vraie baisse, ca ne doit pas non plus ressortir comme une affaire (obtenu ${r.score.toFixed(1)})`,
+  );
+});
