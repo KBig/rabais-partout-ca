@@ -2,6 +2,7 @@ import type { StoreMeta } from './types';
 import { bestBuyAdapter } from './stores/bestbuy';
 import { neweggAdapter } from './stores/newegg';
 import { ikeaAdapter } from './stores/ikea';
+import { costcoAdapter } from './stores/costco';
 import {
   createShopifyAdapter,
   REGLES_MAISON,
@@ -103,6 +104,9 @@ export const STORES: StoreMeta[] = [
     homepage: 'https://www.costco.ca',
     color: '#005DAA',
     requestsPerSecond: 0.5,
+    // Une requete par fiche : cadence prudente, ils ne declarent aucun
+    // Crawl-delay mais 8 736 fiches meritent d'etre prises sans brusquer.
+    adapter: costcoAdapter,
   },
   {
     id: 'amazon-ca',
