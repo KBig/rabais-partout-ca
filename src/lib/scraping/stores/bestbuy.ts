@@ -4,6 +4,7 @@ import type {
   CrawlContext,
   ProductCondition,
 } from '../types';
+import { pageDeReprise, avancerCurseur, curseursDe, parCouverture } from '../core/curseur';
 
 /**
  * Best Buy Canada.
@@ -19,6 +20,9 @@ import type {
 
 const BASE = 'https://www.bestbuy.ca';
 const PAGE_SIZE = 100;
+
+/** Repete ici : le curseur est ecrit avant que l'adaptateur ne soit construit. */
+const BEST_BUY_ID = 'bestbuy-ca';
 
 /**
  * Correspondance rayon Best Buy -> slug canonique.
@@ -320,35 +324,60 @@ async function* paginate(
   ctx: CrawlContext,
   budget: CrawlBudget,
 ): AsyncGenerator<RawProduct> {
-  let page = 1;
+  /**
+   * ON REPREND OU LE PASSAGE PRECEDENT S'EST ARRETE.
+   *
+   * Repartir de la page 1 a chaque cycle voulait dire ne jamais depasser les
+   * premiers produits d'un rayon. Additionne sur tout le magasin : 12 000
+   * produits rafraichis sur 282 000, et TOUJOURS LES MEMES. Les 270 000 autres
+   * n'avaient aucun releve de prix, sans qu'aucune erreur ne le signale.
+   */
+  let page = pageDeReprise(BEST_BUY_ID, catId).page;
+  let fin = false;
 
-  while (page <= PAGE_CAP) {
-    if (ctx.signal.aborted) return;
-    if (budget.pagesUsed >= ctx.limits.maxPages) return;
-    if (budget.emitted >= ctx.limits.maxProducts) return;
+  try {
+    while (page <= PAGE_CAP) {
+      if (ctx.signal.aborted) return;
+      if (budget.pagesUsed >= ctx.limits.maxPages) return;
+      if (budget.emitted >= ctx.limits.maxProducts) return;
 
-    const url =
-      `${BASE}/api/v2/json/search?categoryid=${encodeURIComponent(catId)}` +
-      `&page=${page}&pageSize=${PAGE_SIZE}&lang=fr-CA`;
+      const url =
+        `${BASE}/api/v2/json/search?categoryid=${encodeURIComponent(catId)}` +
+        `&page=${page}&pageSize=${PAGE_SIZE}&lang=fr-CA`;
 
-    const data = await ctx.getJson<BbSearchResponse>(url);
-    budget.pagesUsed++;
+      const data = await ctx.getJson<BbSearchResponse>(url);
+      budget.pagesUsed++;
 
-    const batch = data.products ?? [];
-    // Page vide = fin reelle du rayon, ou mur atteint. Dans les deux cas on
-    // s'arrete : insister ne renverra jamais rien de plus.
-    if (batch.length === 0) return;
+      const batch = data.products ?? [];
+      // Page vide = fin reelle du rayon, ou mur atteint. Dans les deux cas on
+      // s'arrete : insister ne renverra jamais rien de plus.
+      if (batch.length === 0) {
+        fin = true;
+        return;
+      }
 
-    for (const p of batch) {
-      if (budget.seen.has(p.sku)) continue;
-      budget.seen.add(p.sku);
-      const raw = toRawProduct(p, slug);
-      if (!raw) continue;
-      yield raw;
-      if (++budget.emitted >= ctx.limits.maxProducts) return;
+      for (const p of batch) {
+        if (budget.seen.has(p.sku)) continue;
+        budget.seen.add(p.sku);
+        const raw = toRawProduct(p, slug);
+        if (!raw) continue;
+        yield raw;
+        if (++budget.emitted >= ctx.limits.maxProducts) return;
+      }
+
+      // La page n'est comptee comme lue qu'une fois entierement emise. Une
+      // interruption au milieu la refera au prochain passage : refaire une page
+      // ne coute qu'une requete, en sauter une perd cent produits.
+      page++;
     }
-
-    page++;
+    // Sortie par le mur de l'API : le rayon est epuise pour ce qu'il expose.
+    fin = true;
+  } finally {
+    // `finally` parce qu'un generateur peut etre abandonne par son
+    // consommateur — budget epuise, temps ecoule — sans repasser par la fin du
+    // corps. L'avancement doit survivre a tous ces chemins, sinon le curseur
+    // ne bougerait jamais precisement dans le cas ou il sert.
+    avancerCurseur(BEST_BUY_ID, catId, page, fin);
   }
 }
 
@@ -394,7 +423,12 @@ async function* crawlNode(
       `  rayon ${catId} : ${total} produits, au-dela du mur de ${MAX_REACHABLE_PER_QUERY}` +
         ` -> descente dans ${children.length} sous-rayon(s)`,
     );
-    for (const child of children) {
+    // Du MOINS couvert au plus couvert. Sans cet ordre, un sous-rayon deja
+    // termine repartirait de sa page 1 et consommerait le budget avant que ses
+    // voisins aient ete vus une seule fois : le curseur n'aurait fait que
+    // deplacer le probleme d'un cran.
+    const ordre = parCouverture(children, (c) => String(c.id), curseursDe(BEST_BUY_ID));
+    for (const child of ordre) {
       yield* crawlNode(String(child.id), slug, ctx, budget, depth + 1);
     }
     return;
@@ -414,7 +448,7 @@ async function* crawlCategoryIds(
   // couvre tout l'arbre : un meme SKU vit souvent dans plusieurs sous-rayons.
   const budget: CrawlBudget = { emitted: 0, pagesUsed: 0, seen: new Set() };
 
-  for (const catId of ids) {
+  for (const catId of parCouverture(ids, (i) => i, curseursDe(BEST_BUY_ID))) {
     yield* crawlNode(catId, slug, ctx, budget, 0);
   }
 }

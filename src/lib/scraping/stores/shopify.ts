@@ -1,4 +1,5 @@
 import type { StoreAdapter, RawProduct, CrawlContext } from '../types';
+import { pageDeReprise, avancerCurseur } from '../core/curseur';
 import { enParallele } from '../core/parallele';
 
 /**
@@ -251,12 +252,43 @@ async function* parcourir(
   let emis = 0;
   const parSlug = new Map<string, number>();
 
-  // Les pages sont independantes et numerotees : on peut en demander plusieurs
-  // a la fois plutot que d'attendre chacune. Le limiteur garde la cadence.
-  const pages = Array.from(
-    { length: Math.min(MAX_PAGES, ctx.limits.maxPages) },
-    (_, i) => i + 1,
+  /**
+   * ON REPREND LA OU LE PASSAGE PRECEDENT S'EST ARRETE.
+   *
+   * Repartir de la page 1 a chaque fois avait deux effets, aucun visible dans
+   * les journaux. Un catalogue plus grand que le plafond n'etait jamais
+   * parcouru en entier — les 6 000 derniers articles de Brick n'existaient pas
+   * pour nous. Et comme les pages sont demandees en parallele, elles reviennent
+   * dans l'ordre ou elles ARRIVENT : chaque passage voyait un sous-ensemble
+   * different, d'ou « 12 000 vus, 0 changement de prix » — les produits revus
+   * n'etaient pas les memes, il n'y avait rien a comparer.
+   *
+   * Le curseur ne sert qu'au parcours COMPLET. Une collecte filtree sur une
+   * categorie vise autre chose et repart du debut, sans toucher a l'avancement
+   * du parcours general.
+   */
+  const suivi = !filtre;
+  const depart = suivi ? pageDeReprise(cfg.id).page : 1;
+
+  /**
+   * La fenetre est fixee en PAGES, pas en produits emis.
+   *
+   * C'est ce qui rend le passage previsible : on sait d'avance ou il
+   * s'arretera, donc ou reprendre. Compter les produits emis ne le permettait
+   * pas — le filtrage par categorie en ecarte un nombre variable, et l'arrivee
+   * desordonnee des pages rendait le point d'arret different a chaque fois.
+   *
+   * Emettre moins que le plafond est normal et voulu : la fenetre borne le
+   * BRUT lu chez le marchand, le filtre en retire ensuite ce qui ne nous
+   * concerne pas.
+   */
+  const fenetre = Math.max(
+    1,
+    Math.min(MAX_PAGES, ctx.limits.maxPages, Math.ceil(ctx.limits.maxProducts / PAGE_SIZE)),
   );
+
+  const pages = Array.from({ length: fenetre }, (_, i) => depart + i);
+  if (suivi && depart > 1) ctx.log(`  reprise a la page ${depart} (fenetre de ${fenetre})`);
 
   let finies = false;
   const lots = enParallele(
@@ -275,11 +307,11 @@ async function* parcourir(
         return [];
       }
     },
-    () => finies || ctx.signal.aborted || emis >= ctx.limits.maxProducts,
+    () => finies || ctx.signal.aborted,
   );
 
   for await (const lot of lots) {
-    if (ctx.signal.aborted || emis >= ctx.limits.maxProducts) break;
+    if (ctx.signal.aborted) break;
 
     for (const p of lot) {
       const etiquettes = Array.isArray(p.tags) ? p.tags.join(' ') : (p.tags ?? '');
@@ -292,8 +324,16 @@ async function* parcourir(
 
       parSlug.set(slug, (parSlug.get(slug) ?? 0) + 1);
       yield raw;
-      if (++emis >= ctx.limits.maxProducts) break;
+      emis++;
     }
+  }
+
+  // Une interruption laisse le passage a moitie fait : avancer le curseur
+  // sauterait par-dessus des pages jamais lues. On le laisse ou il est, et le
+  // prochain cycle refera cette fenetre.
+  if (suivi && !ctx.signal.aborted) {
+    avancerCurseur(cfg.id, '', depart + fenetre, finies);
+    if (finies) ctx.log('  fin du catalogue atteinte — le prochain passage repart du debut');
   }
 
   for (const [slug, n] of [...parSlug].sort((a, b) => b[1] - a[1]).slice(0, 8)) {

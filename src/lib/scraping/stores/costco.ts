@@ -1,4 +1,7 @@
 import type { StoreAdapter, RawProduct, CrawlContext } from '../types';
+import { urlsMortes, noterUrlMorte, noterUrlVivante } from '../core/urls-mortes';
+import { HttpError } from '../core/http';
+import { pageDeReprise, avancerCurseur } from '../core/curseur';
 import { enParallele } from '../core/parallele';
 
 /**
@@ -229,24 +232,74 @@ const assezLu = (contenu: string): boolean => {
   return i >= 0 && contenu.indexOf('</script>', i) >= 0;
 };
 
+const COSTCO_ID = 'costco-ca';
+
+/** Plafond d'une tranche : au-dela, un passage ne finit jamais. */
+const TRANCHE_MAX = 2000;
+
 async function* parcourir(ctx: CrawlContext, filtre?: string): AsyncGenerator<RawProduct> {
-  const urls = await urlsProduit(ctx);
-  ctx.log(`  ${urls.length} fiches produit listees par leur sitemap`);
+  const annoncees = await urlsProduit(ctx);
+
+  // Les adresses dont on sait qu'elles ne rendent plus rien sont ecartees AVANT
+  // le decoupage en tranches : sinon une tranche entiere pourrait n'etre faite
+  // que de 404, et couter deux mille requetes pour zero produit.
+  const mortes = urlsMortes(COSTCO_ID);
+  const urls = mortes.size > 0 ? annoncees.filter((u) => !mortes.has(u)) : annoncees;
+  ctx.log(
+    `  ${annoncees.length} fiches annoncees par leur sitemap` +
+      (mortes.size > 0 ? `, ${mortes.size} connues mortes -> ${urls.length} a lire` : ''),
+  );
 
   let emis = 0;
   let ignores = 0;
-  let suivante = 0;
+
+  /**
+   * ON REPREND OU LE PASSAGE PRECEDENT S'EST ARRETE.
+   *
+   * Une requete par fiche, huit mille sept cents fiches : aucun passage ne les
+   * lit toutes. Repartir du debut a chaque cycle revenait a relire eternellement
+   * les memes premieres fiches — dont 82 % sont des 404 — et a ne jamais
+   * atteindre le reste du catalogue.
+   *
+   * Le curseur compte ici en TRANCHES de la liste du sitemap, dont l'ordre est
+   * stable d'un passage a l'autre. Le curseur n'avance que si la tranche a ete
+   * lue en entier : une interruption la refait, plutot que de sauter par-dessus
+   * des fiches jamais vues.
+   */
+  const tranche = Math.max(200, Math.min(TRANCHE_MAX, ctx.limits.maxProducts));
+  const numero = pageDeReprise(COSTCO_ID).page;
+  const debut = (numero - 1) * tranche;
+  const aLire = urls.slice(debut, debut + tranche);
+  const dernierePasse = debut + tranche >= urls.length;
+
+  if (aLire.length === 0) {
+    // Le sitemap a retreci depuis le dernier passage : on repart du debut.
+    avancerCurseur(COSTCO_ID, '', 1, true);
+    return;
+  }
+  ctx.log(`  tranche ${numero} : fiches ${debut + 1} a ${debut + aLire.length}`);
 
   // Les fiches sont independantes : la file continue relance des qu'une place
   // se libere, ce qui laisse la cadence declaree seule maitresse du rythme.
   const fiches = enParallele(
-    urls,
+    aLire,
     EN_PARALLELE,
     async (url) => {
       try {
         // Lecture ecourtee : le bloc utile finit au sixieme du document.
-        return extraireFiche(await ctx.getPartial(url, assezLu), url);
-      } catch {
+        const fiche = extraireFiche(await ctx.getPartial(url, assezLu), url);
+        if (fiche) noterUrlVivante(COSTCO_ID, url);
+        // Page servie mais sans bloc produit : l'adresse existe et ne
+        // rendra rien. C'est un echec definitif, au meme titre qu'un 404.
+        else noterUrlMorte(COSTCO_ID, url);
+        return fiche;
+      } catch (e) {
+        // SEULS les echecs DEFINITIFS sont retenus. Un 429 ou un 500 vient de
+        // leur cote et passera ; l'oublier reviendrait a effacer de la collecte
+        // une fiche parfaitement valide, sans que rien ne le signale.
+        if (e instanceof HttpError && e.status >= 400 && e.status < 500 && e.status !== 429) {
+          noterUrlMorte(COSTCO_ID, url, true);
+        }
         return null;
       }
     },
@@ -265,6 +318,13 @@ async function* parcourir(ctx: CrawlContext, filtre?: string): AsyncGenerator<Ra
     yield raw;
     emis++;
     if (emis % 200 === 0) ctx.log(`  … ${emis} produits retenus (${ignores} ecartes)`);
+  }
+
+  // Une interruption laisse la tranche a moitie lue : avancer sauterait des
+  // fiches jamais vues. On ne bouge que sur une tranche entierement parcourue.
+  if (!ctx.signal.aborted) {
+    avancerCurseur(COSTCO_ID, '', numero + 1, dernierePasse);
+    if (dernierePasse) ctx.log('  fin du sitemap — le prochain passage repart du debut');
   }
 }
 

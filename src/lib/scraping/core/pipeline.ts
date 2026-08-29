@@ -1,3 +1,4 @@
+import { hostname } from 'node:os';
 import { db, nowIso } from '../../db/index';
 import { getStore } from '../registry';
 import { libererVerrousPerimes, collecteEnCours } from './planification';
@@ -168,17 +169,32 @@ export async function crawl(opts: CrawlOptions): Promise<CrawlResult> {
     .get(store.id) as { consecutive_failures: number; paused_until: string | null } | undefined;
 
   if (health?.paused_until && health.paused_until > nowIso()) {
-    log(`${store.name} est en pause jusqu'à ${health.paused_until} (échecs répétés).`);
-    return { runId: -1, status: 'skipped', seen: 0, created: 0, priceChanges: 0, requests: 0 };
+    // Le motif voyage AVEC le resultat. Un « skipped » nu se confond avec un
+    // magasin deja a jour, et c'est ainsi que Best Buy a pu rester au repos
+    // sans que rien ne le dise.
+    const motif =
+      `${store.name} est en pause jusqu'à ${health.paused_until} ` +
+      `(${health.consecutive_failures} échec(s) consécutif(s)).`;
+    log(motif);
+    return {
+      runId: -1, status: 'skipped', seen: 0, created: 0, priceChanges: 0,
+      requests: 0, error: motif,
+    };
   }
 
+  // La ligne est SIGNEE des sa creation : identifiant de processus et machine.
+  // C'est ce qui permet plus tard de demander au systeme si le detenteur du
+  // verrou existe encore, au lieu de le presumer mort au bout d'un delai.
+  // Signer dans un second temps laisserait une fenetre ou la ligne existe sans
+  // proprietaire — et donc, pour un autre processus, un verrou indechiffrable.
   const runId = Number(
     conn
       .prepare(
-        `INSERT INTO crawl_runs (store_id, strategy, target, status, started_at)
-         VALUES (?, ?, ?, 'running', ?)`,
+        `INSERT INTO crawl_runs (store_id, strategy, target, status, started_at, pid, host)
+         VALUES (?, ?, ?, 'running', ?, ?, ?)`,
       )
-      .run(store.id, opts.strategy, opts.target ?? null, nowIso()).lastInsertRowid,
+      .run(store.id, opts.strategy, opts.target ?? null, nowIso(), process.pid, hostname())
+      .lastInsertRowid,
   );
 
   const http = new HttpClient({ requestsPerSecond: store.requestsPerSecond });
@@ -268,14 +284,36 @@ export async function crawl(opts: CrawlOptions): Promise<CrawlResult> {
     }
     error = err instanceof Error ? err.message : String(err);
 
-    // Backoff exponentiel : 5 min, 10, 20, 40… plafonné à 6 h.
-    const fails = (health?.consecutive_failures ?? 0) + 1;
-    const pauseMin = Math.min(360, 5 * 2 ** (fails - 1));
-    conn
-      .prepare('UPDATE stores SET consecutive_failures = ?, paused_until = ? WHERE id = ?')
-      .run(fails, new Date(Date.now() + pauseMin * 60_000).toISOString(), store.id);
+    /**
+     * UNE INTERRUPTION VOULUE N'EST PAS UN ECHEC DU MARCHAND.
+     *
+     * Le disjoncteur existe pour epargner un site en difficulte : echecs
+     * repetes, pause exponentielle. Mais il comptait aussi nos PROPRES arrets —
+     * fin du budget de temps, Ctrl+C. Or depuis que le temps est la borne
+     * principale, tout passage sur un gros catalogue se termine ainsi.
+     *
+     * Best Buy s'est retrouve « en pause pour echecs repetes » apres deux
+     * collectes qui s'etaient parfaitement bien passees : 35 000 produits vus,
+     * 746 changements de prix releves, et le magasin qui pese 76 % du catalogue
+     * mis au repos pour six heures. Rien ne l'aurait signale : le journal disait
+     * « skipped », comme un magasin deja a jour.
+     *
+     * Le signal dit lequel des deux cas s'est produit. Nous seuls l'armons.
+     */
+    const arretVoulu = controller.signal.aborted || opts.signal?.aborted === true;
 
-    log(`Échec : ${error} — pause de ${pauseMin} min (échec #${fails}).`);
+    if (arretVoulu) {
+      log(`Interrompu volontairement apres ${stats.seen} produits — aucun echec impute.`);
+    } else {
+      // Backoff exponentiel : 5 min, 10, 20, 40… plafonné à 6 h.
+      const fails = (health?.consecutive_failures ?? 0) + 1;
+      const pauseMin = Math.min(360, 5 * 2 ** (fails - 1));
+      conn
+        .prepare('UPDATE stores SET consecutive_failures = ?, paused_until = ? WHERE id = ?')
+        .run(fails, new Date(Date.now() + pauseMin * 60_000).toISOString(), store.id);
+
+      log(`Échec : ${error} — pause de ${pauseMin} min (échec #${fails}).`);
+    }
   }
 
   // « partial » = on a planté mais on a quand même ramené des données utiles.

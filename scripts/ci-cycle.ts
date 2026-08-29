@@ -79,35 +79,93 @@ log(
 );
 
 /**
- * Budget par magasin.
+ * BUDGET PROPORTIONNEL A CE QU'IL Y A A RELEVER.
  *
- * Sans plafond, le premier de la liste consommait tout le temps disponible et
- * les suivants n'etaient jamais visites. Chacun recoit sa part, et le temps
- * rendu par un magasin rapide profite aux suivants.
+ * Un partage egal valait deja mieux que rien : sans plafond, le premier de la
+ * liste consommait tout le temps disponible et les suivants n'etaient jamais
+ * visites. Mais il restait injuste dans l'autre sens. Best Buy compte 282 000
+ * produits, Casper 72 — et tous deux recevaient un treizieme du budget. Le
+ * magasin principal etait coupe au bout d'une minute apres 128 requetes,
+ * pendant que trois boutiques deja completes en dix secondes gardaient chacune
+ * une part qu'elles n'utilisaient pas.
+ *
+ * On repartit donc au prorata du catalogue. Le plancher garantit que meme la
+ * plus petite boutique est visitee, et le temps qu'un magasin rapide n'utilise
+ * pas revient tout seul aux suivants : le calcul se refait a chaque tour sur le
+ * temps REELLEMENT restant, pas sur une part figee au depart.
  */
-const budgetParMagasin = (restants: number) =>
-  Math.max(60_000, (deadline - Date.now()) / Math.max(1, restants));
+const PLANCHER_MS = 20_000;
+
+/** Canadian Tire : une fois par jour, avec un vrai creneau. */
+const CT_PERIODE_H = 20;
+const CT_CRENEAU_MS = 5 * 60_000;
+
+const budgetParMagasin = (rang: number): number => {
+  // Le magasin a creneau fixe est retire du partage : son temps est deja
+  // reserve, le compter ici l'amputerait une seconde fois aux autres.
+  const aVenir = classement.slice(rang).filter((m) => m.store.id !== 'canadiantire-ca');
+  const total = aVenir.reduce((n, m) => n + Math.max(1, m.produits), 0);
+  const part = Math.max(1, aVenir[0]?.produits ?? 1) / Math.max(1, total);
+  return Math.max(PLANCHER_MS, (deadline - Date.now()) * part);
+};
 
 for (const [rang, store] of ordre.entries()) {
   if (controller.signal.aborted) break;
 
-  // Un magasin qui exige un navigateur ne tourne pas dans un cycle court :
-  // dix secondes par page imposees par le marchand n'y tiennent pas. Il se
-  // collecte a part, sur une machine dediee.
+  /**
+   * UN CRENEAU QUOTIDIEN POUR LE MAGASIN LE PLUS COUTEUX.
+   *
+   * Canadian Tire impose dix secondes entre deux pages et exige un navigateur :
+   * son cout par produit est sans commune mesure avec les autres. Il etait donc
+   * ecarte de tous les cycles courts — ce qui revenait, en pratique, a ne
+   * jamais le collecter automatiquement. 441 produits, figes.
+   *
+   * Une part proportionnelle a son catalogue ne reglerait rien : 441 produits
+   * sur 370 000 lui vaudraient vingt secondes, soit deux pages. La regle utile
+   * n'est pas sa TAILLE mais son COUT — et un cout eleve se paie rarement, pas
+   * chichement. Une fois par jour, avec de quoi travailler.
+   */
   if (store.id === 'canadiantire-ca') {
-    log(`${store.name} · ignore en cycle court (Crawl-delay de 10 s impose)`);
-    continue;
+    const heures = classement[rang].heures;
+    if (heures !== null && heures < CT_PERIODE_H) {
+      log(`${store.name} · attend son creneau quotidien (vu il y a ${Math.round(heures)} h)`);
+      continue;
+    }
+    if (deadline - Date.now() < CT_CRENEAU_MS) {
+      log(`${store.name} · reporte : moins de ${CT_CRENEAU_MS / 60_000} min de budget restant`);
+      continue;
+    }
   }
 
   const limite = new AbortController();
-  const fin = setTimeout(() => limite.abort(), budgetParMagasin(ordre.length - rang));
+  const fin = setTimeout(
+    () => limite.abort(),
+    store.id === 'canadiantire-ca'
+      ? Math.min(CT_CRENEAU_MS, deadline - Date.now())
+      : budgetParMagasin(rang),
+  );
   const signal = AbortSignal.any([controller.signal, limite.signal]);
+
+  /**
+   * LE PLAFOND SUIT LA TAILLE DU CATALOGUE, ET C'EST LE TEMPS QUI BORNE.
+   *
+   * Un plafond fixe de 12 000 etait la vraie limite, pas le temps : Best Buy
+   * terminait en quarante-sept secondes sur onze minutes disponibles, et
+   * rafraichissait 12 000 produits sur 282 000 — toujours les memes, puisque
+   * le parcours repartait du debut. Le reste du catalogue n'avait aucun releve.
+   *
+   * Relever le plafond n'etait pas envisageable tant qu'un passage interrompu
+   * perdait son avancement. Le curseur de pagination l'a rendu sur : une
+   * interruption ne coute plus que la page en cours. Le temps peut donc
+   * redevenir la seule borne, ce qu'il aurait toujours du etre.
+   */
+  const plafond = Math.max(12_000, classement[rang].produits);
 
   const res = await crawl({
     storeId: store.id,
     strategy: 'deals',
-    maxProducts: 12000,
-    maxPages: 160,
+    maxProducts: plafond,
+    maxPages: Math.max(160, Math.ceil(plafond / 100)),
     signal,
     log: () => {},
   });
@@ -120,7 +178,11 @@ for (const [rang, store] of ordre.entries()) {
 
   log(
     `${store.name} · ${res.status} — ${res.seen} vus, ${res.created} nouveaux, ` +
-      `${res.priceChanges} changements de prix, ${res.requests} requêtes`,
+      `${res.priceChanges} changements de prix, ${res.requests} requêtes` +
+      // Un magasin ecarte doit DIRE pourquoi : pause du disjoncteur, collecte
+      // deja en cours. Sans motif, il se confond avec un magasin a jour.
+      (res.status === 'skipped' && res.error ? `
+           ↳ ${res.error}` : ''),
   );
 
   const retired = retireStaleProducts(store.id);

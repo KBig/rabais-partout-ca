@@ -15,6 +15,7 @@ import { scoreProduct, wilsonLowerBound } from '../src/lib/pricing/score';
 import { typeToken, type PeerStats } from '../src/lib/pricing/peers';
 import { extractSpecs } from '../src/lib/specs';
 import { prixCanadien } from '../src/lib/scraping/stores/canadiantire';
+import { processusVivant } from '../src/lib/scraping/core/processus';
 import {
   gammeFromDistribution,
   gammeFromRank,
@@ -497,4 +498,39 @@ test('un prix se lit dans les deux langues', () => {
   // Et ce qui n'est pas un prix ne doit pas en devenir un.
   assert.equal(prixCanadien(''), null);
   assert.equal(prixCanadien('Rupture de stock'), null);
+});
+
+// ---------------------------------------------------------------------------
+// Verrou de collecte : le detenteur est-il vivant ?
+// ---------------------------------------------------------------------------
+//
+// Deux collectes du meme magasin lancees ensemble se disputent la cadence
+// autorisee et avancent chacune deux fois moins vite. Le verrou l'empeche —
+// mais il ne doit jamais survivre a son proprietaire, sinon un simple Ctrl+C
+// interdirait de recollecter ce magasin.
+
+test('le processus courant est reconnu vivant', () => {
+  assert.equal(processusVivant(process.pid), true);
+});
+
+test('un processus termine est reconnu mort', async () => {
+  const { spawn } = await import('node:child_process');
+  const enfant = spawn(process.execPath, ['-e', '0'], { stdio: 'ignore' });
+  const pid = enfant.pid!;
+
+  // `close` arrive apres `exit` : le processus est fini ET ses flux sont
+  // fermes, donc le systeme ne le connait definitivement plus. L'ecoute est
+  // posee AVANT toute attente — attendre `exit` d'abord ferait manquer `close`
+  // s'il survient dans le meme tour de boucle, et le test resterait suspendu.
+  await new Promise<void>((r) => enfant.once('close', () => r()));
+
+  assert.equal(processusVivant(pid), false);
+});
+
+test('un identifiant absurde ne vise pas le groupe de processus courant', () => {
+  // Sous POSIX, `kill(0, 0)` s'adresse a TOUT le groupe et repondrait
+  // « vivant » : un verrou enregistre a zero ne serait alors jamais libere.
+  assert.equal(processusVivant(0), false);
+  assert.equal(processusVivant(-1), false);
+  assert.equal(processusVivant(1.5), false);
 });

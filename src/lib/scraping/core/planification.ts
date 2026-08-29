@@ -1,4 +1,7 @@
+import { hostname } from 'node:os';
+
 import { db, nowIso } from '../../db';
+import { processusVivant } from './processus';
 import { liveStores } from '../registry';
 import type { StoreMeta } from '../types';
 
@@ -18,6 +21,12 @@ import type { StoreMeta } from '../types';
  * pour toujours — onze au dernier compte. Un verrou qui ne se libere jamais
  * bloquerait bientot tout.
  *
+ * UN DELAI NE SUFFISAIT PAS A LE DIRE. Presumer la mort au bout de quatre-vingt
+ * -dix minutes se trompe dans les deux sens : trop court, on coupe une passe
+ * Costco encore active ; trop long, un simple Ctrl+C interdit de recollecter
+ * pendant une heure et demie. Costco a ete ignore a quatre-vingt-huit minutes
+ * pour cette raison exacte. On demande donc au systeme, qui SAIT.
+ *
  * L'ORDRE DE PASSAGE ETAIT AVEUGLE. Une rotation fixe ne regarde pas ce qui a
  * besoin d'etre rafraichi : Best Buy est reste dix-neuf heures sans releve
  * pendant qu'IKEA etait collecte trois fois de suite.
@@ -33,47 +42,75 @@ import type { StoreMeta } from '../types';
  */
 
 /**
- * Au-dela, une collecte « en cours » est consideree comme morte.
- *
- * Genereux a dessein : une passe Costco legitime dure une demi-heure. Ce qui
- * compte est de ne pas rester bloque indefiniment, pas de reagir vite.
+ * Dernier recours quand on ne peut PAS interroger le systeme : une collecte
+ * partie d'une autre machine. Genereux a dessein — une passe Costco legitime
+ * dure une demi-heure, et liberer trop tot est pire que liberer trop tard.
  */
 const VERROU_PERIME_MIN = 90;
+
+/** Cette machine. Deux collectes ne se croisent que si elles la partagent. */
+const ICI = hostname();
+
+interface LigneVerrou {
+  id: number;
+  store_id: string;
+  started_at: string;
+  pid: number | null;
+  host: string | null;
+}
+
+/**
+ * Ce verrou est-il mort ?
+ *
+ * On demande au systeme quand on peut, on presume quand on ne peut pas. Un
+ * verrou pose ici par un processus disparu est declare mort IMMEDIATEMENT :
+ * plus d'attente de quatre-vingt-dix minutes apres un Ctrl+C.
+ */
+function verrouMort(r: LigneVerrou, limiteIso: string): boolean {
+  if (r.host === ICI && r.pid !== null) return !processusVivant(r.pid);
+  // Autre machine, ou ligne anterieure a la migration 028 : on ne peut rien
+  // demander au systeme d'ici. Le delai reste le seul recours honnete.
+  return r.started_at < limiteIso;
+}
+
+function verrousActifs(storeId?: string): LigneVerrou[] {
+  const sql =
+    `SELECT id, store_id, started_at, pid, host FROM crawl_runs
+      WHERE status = 'running'` + (storeId ? ' AND store_id = ?' : '');
+  const st = db().prepare<string[], LigneVerrou>(sql);
+  return storeId ? st.all(storeId) : st.all();
+}
 
 /**
  * Libere les verrous laisses par des processus disparus.
  *
  * A appeler au demarrage de toute commande de collecte : un plantage, un
  * Ctrl+C ou une machine eteinte laissent sinon une ligne « running » qui
- * interdirait a jamais de recollecter ce magasin.
+ * interdirait de recollecter ce magasin.
  */
 export function libererVerrousPerimes(log: (m: string) => void = () => {}): number {
   const limite = new Date(Date.now() - VERROU_PERIME_MIN * 60_000).toISOString();
+  const morts = verrousActifs().filter((r) => verrouMort(r, limite));
+  if (morts.length === 0) return 0;
 
-  const n = db()
-    .prepare<[string, string]>(
-      `UPDATE crawl_runs
-          SET status = 'failed',
-              error = COALESCE(error, 'interrompu : processus disparu'),
-              finished_at = ?
-        WHERE status = 'running' AND started_at < ?`,
-    )
-    .run(nowIso(), limite).changes;
+  const st = db().prepare<[string, number]>(
+    `UPDATE crawl_runs
+        SET status = 'failed',
+            error = COALESCE(error, 'interrompu : processus disparu'),
+            finished_at = ?
+      WHERE id = ?`,
+  );
+  const t = nowIso();
+  db().transaction(() => morts.forEach((r) => st.run(t, r.id)))();
 
-  if (n > 0) log(`  ${n} collecte(s) interrompue(s) liberee(s)`);
-  return n;
+  log(`  ${morts.length} collecte(s) interrompue(s) liberee(s)`);
+  return morts.length;
 }
 
-/** Une collecte de ce magasin est-elle deja en cours ? */
+/** Une collecte de ce magasin est-elle reellement en cours ? */
 export function collecteEnCours(storeId: string): boolean {
   const limite = new Date(Date.now() - VERROU_PERIME_MIN * 60_000).toISOString();
-  const r = db()
-    .prepare<[string, string], { n: number }>(
-      `SELECT COUNT(*) n FROM crawl_runs
-        WHERE store_id = ? AND status = 'running' AND started_at >= ?`,
-    )
-    .get(storeId, limite);
-  return (r?.n ?? 0) > 0;
+  return verrousActifs(storeId).some((r) => !verrouMort(r, limite));
 }
 
 export interface MagasinAPrendre {

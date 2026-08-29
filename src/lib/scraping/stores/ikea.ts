@@ -1,4 +1,5 @@
 import type { StoreAdapter, RawProduct, CrawlContext } from '../types';
+import { avancerCurseur, curseursDe, parCouverture } from '../core/curseur';
 import { enParallele } from '../core/parallele';
 
 /**
@@ -186,6 +187,8 @@ function toRawProduct(p: IkeaProduct): RawProduct | null {
  * parent et sous-rayon sont absorbes par la deduplication sur le numero
  * d'article.
  */
+const IKEA_ID = 'ikea-ca';
+
 async function codesRayons(ctx: CrawlContext): Promise<string[]> {
   const xml = await ctx.getText('https://www.ikea.com/sitemaps/cat-fr-CA_1.xml');
   const codes = new Set<string>();
@@ -208,24 +211,44 @@ async function* parcourir(ctx: CrawlContext, filtre?: string): AsyncGenerator<Ra
   let emis = 0;
   const parSlug = new Map<string, number>();
 
+  /**
+   * LES RAYONS LES MOINS VUS PASSENT DEVANT.
+   *
+   * Un passage complet demande 297 requetes, soit environ une minute. Quand le
+   * budget de temps est plus court — et il l'est souvent, IKEA ne pesant que
+   * 2 % du catalogue — la liste etait tronquee TOUJOURS AU MEME ENDROIT : les
+   * derniers rayons du sitemap n'avaient jamais de releve de prix.
+   *
+   * L'ordre par couverture supprime le probleme sans rien couter : ce qui n'a
+   * pas ete lu au dernier passage est lu au suivant.
+   */
+  const ordre = parCouverture(codes, (c) => c, curseursDe(IKEA_ID));
+
   // Les rayons sont independants : rien n'oblige a attendre la reponse de l'un
   // pour demander le suivant. Le limiteur de debit garde la main sur la cadence.
   const lots = enParallele(
-    codes,
+    ordre,
     8,
     async (code) => {
       try {
-        return await ctx.getJson<IkeaResponse>(`${API}?category=${code}&size=${TAILLE}`);
+        const data = await ctx.getJson<IkeaResponse>(`${API}?category=${code}&size=${TAILLE}`);
+        return { code, data };
       } catch {
-        return null; // un rayon indisponible ne doit pas interrompre les autres
+        // Un rayon indisponible ne doit pas interrompre les autres — et n'est
+        // pas compte comme lu, pour etre retente au passage suivant.
+        return { code, data: null };
       }
     },
     () => ctx.signal.aborted || emis >= ctx.limits.maxProducts,
   );
 
-  for await (const data of lots) {
+  for await (const { code, data } of lots) {
     if (ctx.signal.aborted || emis >= ctx.limits.maxProducts) break;
     if (!data) continue;
+
+    // Un rayon IKEA se lit d'un seul coup (`size=1000`) : le voir une fois,
+    // c'est l'avoir parcouru en entier. On enregistre donc un tour complet.
+    avancerCurseur(IKEA_ID, code, 1, true);
 
     for (const p of data.productListPage?.productWindow ?? []) {
       if (!p.itemNo || vus.has(p.itemNo)) continue;

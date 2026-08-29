@@ -1,4 +1,5 @@
 import type { StoreAdapter, RawProduct, CrawlContext } from '../types';
+import { avancerCurseur, curseursDe, parCouverture } from '../core/curseur';
 import { renderer, closeRenderer } from '../core/renderer';
 
 /**
@@ -243,6 +244,8 @@ async function rayons(ctx: CrawlContext): Promise<Array<{ url: string; slug: str
   return out;
 }
 
+const CT_ID = 'canadiantire-ca';
+
 async function* parcourir(ctx: CrawlContext, filtre?: string): AsyncGenerator<RawProduct> {
   const tous = await rayons(ctx);
   const cibles = filtre ? tous.filter((r) => r.slug === filtre) : tous;
@@ -251,8 +254,19 @@ async function* parcourir(ctx: CrawlContext, filtre?: string): AsyncGenerator<Ra
   const rendu = renderer();
   let emis = 0;
 
+  /**
+   * LES RAYONS LES MOINS VUS PASSENT DEVANT.
+   *
+   * Ce marchand impose dix secondes entre deux pages et exige un navigateur :
+   * aucun passage ne parcourt la liste entiere. Dans un ordre fixe, elle etait
+   * donc tronquee TOUJOURS AU MEME ENDROIT, et les derniers rayons n'avaient
+   * jamais de releve — 441 produits collectes la ou le catalogue en compte des
+   * dizaines de milliers.
+   */
+  const ordre = parCouverture(cibles, (c) => c.url, curseursDe(CT_ID));
+
   try {
-    for (const { url, slug } of cibles) {
+    for (const { url, slug } of ordre) {
       if (ctx.signal.aborted || emis >= ctx.limits.maxProducts) break;
 
       const vusRayon = new Set<string>();
@@ -299,6 +313,14 @@ async function* parcourir(ctx: CrawlContext, filtre?: string): AsyncGenerator<Ra
       }
 
       if (vusRayon.size > 0) ctx.log(`  ${slug} ← ${vusRayon.size} produits`);
+
+      // Le rayon a ete parcouru jusqu'a sa fin — page vide, repetition, ou mur
+      // de pagination. Un tour de plus a son compteur : il passera derriere
+      // ceux qui n'ont pas encore ete vus.
+      //
+      // Rien n'est enregistre si l'on a ete interrompu au milieu : le rayon
+      // serait compte comme couvert alors qu'il ne l'est pas.
+      if (!ctx.signal.aborted) avancerCurseur(CT_ID, url, 1, true);
     }
   } finally {
     await closeRenderer();

@@ -72,7 +72,7 @@ export function selectForEnrichment(
   const staleBefore = new Date(Date.now() - refreshAfterDays * 86_400_000).toISOString();
 
   return db()
-    .prepare<[string, string], QueueRow>(
+    .prepare<[string, string, number], QueueRow>(
       `SELECT p.id, p.store_id, p.store_sku, p.title, p.url,
               p.brand, p.model, p.category_slug, p.current_price
          FROM products p
@@ -101,11 +101,50 @@ export function selectForEnrichment(
           AND (e.product_id IS NULL
                OR (e.status != 'ok' AND e.attempts < 3)
                OR e.enriched_at < ?)
-        ORDER BY COALESCE(s.score, 0) DESC, p.current_price DESC`,
+        ORDER BY COALESCE(s.score, 0) DESC, p.current_price DESC
+        LIMIT ?`,
     )
-    .all(storeId, staleBefore)
-    .slice(0, limit);
+    // Le plafond est pose PAR SQLITE, pas apres coup. La version precedente
+    // ramenait toutes les lignes eligibles — 282 000 pour Best Buy — avant d'en
+    // garder 250. Le tri devait alors porter sur l'ensemble, a chaque cycle.
+    //
+    // Le vivier est plus large que le besoin parce que le tri s'affine ensuite :
+    // certaines lignes seront ecartees faute de source applicable.
+    .all(storeId, staleBefore, Math.max(limit, VIVIER_PAR_BESOIN * limit));
 }
+
+/** Combien de candidats ramener pour en retenir un. */
+const VIVIER_PAR_BESOIN = 8;
+
+/**
+ * Une source peut-elle apprendre quelque chose sur ce produit ?
+ *
+ * Sans ce filtre, la file tentait des produits qu'AUCUNE source ne couvre. Chez
+ * Costco — pas de modele publie, donc ni prix constructeur ni rapprochement
+ * entre magasins — cela donnait « 250 echecs, 0 requete » a chaque cycle :
+ * quatre-vingt-dix secondes a ecrire des lignes d'echec, tout le creneau du
+ * magasin, pour une information qu'on savait d'avance inaccessible.
+ *
+ * Et l'echec ne remplissant pas la marque, la requete resselectionnait
+ * exactement les memes produits au cycle suivant. Une boucle parfaitement
+ * stable, et parfaitement sterile.
+ */
+export function uneSourcePeutAider(ref: ProductRef): boolean {
+  return ALL_SOURCES.some((s) => s.supports(ref));
+}
+
+/** Une ligne de file vue comme un produit. Partage par le filtre et la boucle. */
+const refDe = (row: QueueRow): ProductRef => ({
+  id: row.id,
+  storeId: row.store_id,
+  storeSku: row.store_sku,
+  title: row.title,
+  url: row.url,
+  brand: row.brand,
+  model: row.model,
+  categorySlug: row.category_slug,
+  currentPrice: row.current_price,
+});
 
 export async function enrichStore(opts: EnrichOptions): Promise<EnrichResult> {
   const conn = db();
@@ -113,9 +152,22 @@ export async function enrichStore(opts: EnrichOptions): Promise<EnrichResult> {
   const log = opts.log ?? (() => {});
   const limit = opts.limit ?? 200;
 
-  const queue = selectForEnrichment(store.id, limit, opts.refreshAfterDays ?? 30);
+  const candidats = selectForEnrichment(store.id, limit, opts.refreshAfterDays ?? 30);
   const result: EnrichResult = { attempted: 0, ok: 0, partial: 0, failed: 0, requests: 0 };
-  if (queue.length === 0) return result;
+
+  // On ne tente que ce qui peut aboutir. Un produit qu'aucune source ne couvre
+  // echouerait sans meme faire de requete, et reviendrait a l'identique au
+  // cycle suivant.
+  const queue = candidats.filter((row) => uneSourcePeutAider(refDe(row))).slice(0, limit);
+  if (queue.length === 0) {
+    if (candidats.length > 0) {
+      log(
+        `${store.name} : ${candidats.length} produit(s) en attente, mais aucune source ` +
+          `applicable (ni modele publie, ni marque a site verifie).`,
+      );
+    }
+    return result;
+  }
 
   log(`${queue.length} produit(s) à enrichir pour ${store.name}.`);
 
@@ -175,17 +227,7 @@ export async function enrichStore(opts: EnrichOptions): Promise<EnrichResult> {
     if (signal.aborted) break;
     result.attempted++;
 
-    const ref: ProductRef = {
-      id: row.id,
-      storeId: row.store_id,
-      storeSku: row.store_sku,
-      title: row.title,
-      url: row.url,
-      brand: row.brand,
-      model: row.model,
-      categorySlug: row.category_slug,
-      currentPrice: row.current_price,
-    };
+    const ref = refDe(row);
 
     try {
       const resolved = await resolveEnrichment(ref, ALL_SOURCES, httpFacade);

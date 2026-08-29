@@ -357,6 +357,82 @@ const money = (n: number | null) => (n === null ? '—' : `${n.toFixed(2)} $`);
 // ---------------------------------------------------------------------------
 // Rapport
 // ---------------------------------------------------------------------------
+// SANTE DE LA COLLECTE
+//
+// Un magasin qui ne se collecte plus ne produit aucune erreur : il disparait
+// simplement des journaux, et son catalogue vieillit en silence. C'est ce qui
+// est arrive a Best Buy — 76 % du catalogue mis au repos six heures par le
+// disjoncteur, parce qu'une interruption VOULUE de notre part etait comptee
+// comme un echec du marchand. Le journal disait « skipped », exactement comme
+// un magasin deja a jour.
+//
+// Ces trois controles regardent le seul fait qui compte : la fraicheur reelle.
+// ---------------------------------------------------------------------------
+const enPause = qa<{ name: string; consecutive_failures: number; paused_until: string }>(
+  `SELECT name, consecutive_failures, paused_until FROM stores
+    WHERE paused_until IS NOT NULL AND paused_until > datetime('now')`,
+);
+if (enPause.length > 0) {
+  ajouter({
+    gravite: 'grave',
+    titre: `${enPause.length} magasin(s) au repos force`,
+    detail:
+      'Le disjoncteur les a mis en pause pour echecs repetes. Verifier que ce sont ' +
+      'de vrais echecs du marchand, et non nos propres interruptions de budget.',
+    exemples: enPause.map(
+      (s) => `${s.name} : ${s.consecutive_failures} echec(s), jusqu'a ${s.paused_until}`,
+    ),
+  });
+}
+
+const PERIMES_H = 36;
+const perimes = qa<{ name: string; heures: number; n: number }>(
+  `SELECT s.name,
+          (julianday('now') - julianday(MAX(p.last_seen_at))) * 24 AS heures,
+          COUNT(*) n
+     FROM products p JOIN stores s ON s.id = p.store_id
+    WHERE p.is_active = 1
+    GROUP BY p.store_id
+   HAVING heures > ?
+    ORDER BY heures DESC`,
+  PERIMES_H,
+);
+if (perimes.length > 0) {
+  ajouter({
+    gravite: 'grave',
+    titre: `${perimes.length} magasin(s) sans releve depuis plus de ${PERIMES_H} h`,
+    detail:
+      'Quatre cycles par jour devraient toucher chaque magasin. Passe 36 heures, ' +
+      'la collecte ne les atteint plus — plafond, verrou, ou pause du disjoncteur.',
+    exemples: perimes.map((s) => `${s.name} : ${Math.round(s.heures)} h (${s.n} produits)`),
+  });
+}
+
+// Un curseur de pagination qui ne bouge pas signale un catalogue dont seul le
+// debut est revu — le defaut precis que le curseur existe pour empecher.
+const fige = qa<{ name: string; produits: number; couverts: number }>(
+  `SELECT s.name,
+          (SELECT COUNT(*) FROM products p WHERE p.store_id = s.id AND p.is_active = 1) produits,
+          (SELECT COUNT(*) FROM crawl_cursors c
+            WHERE c.store_id = s.id AND (c.next_page > 1 OR c.laps > 0)) couverts
+     FROM stores s
+    WHERE s.kind = 'retailer'
+      AND produits > 20000
+      AND couverts = 0`,
+);
+if (fige.length > 0) {
+  ajouter({
+    gravite: 'suspect',
+    titre: `${fige.length} gros catalogue(s) sans avancement de parcours`,
+    detail:
+      'Plus de 20 000 produits mais aucun curseur de pagination enregistre : le ' +
+      'parcours repart probablement du debut a chaque passage, et seule la tete ' +
+      'du catalogue est jamais rafraichie.',
+    exemples: fige.map((s) => `${s.name} : ${s.produits} produits, 0 rayon avance`),
+  });
+}
+
+// ---------------------------------------------------------------------------
 const ordre: Record<Gravite, number> = { grave: 0, suspect: 1, info: 2 };
 constats.sort((a, b) => ordre[a.gravite] - ordre[b.gravite]);
 

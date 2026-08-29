@@ -1,4 +1,5 @@
 import type { StoreAdapter, RawProduct, CrawlContext } from '../types';
+import { pageDeReprise, avancerCurseur, curseursDe, parCouverture } from '../core/curseur';
 import { NEWEGG_SUBCATEGORIES } from './newegg-categories';
 
 /**
@@ -47,6 +48,9 @@ const BASE = 'https://www.newegg.ca';
 
 /** Newegg sert 36 articles par page, sans paramètre pour en demander plus. */
 const PAGE_SIZE = 36;
+
+/** Repete ici : le curseur s'ecrit avant que l'adaptateur ne soit construit. */
+const NEWEGG_ID = 'newegg-ca';
 
 /**
  * Mur de pagination, mesuré.
@@ -300,41 +304,69 @@ async function* crawlSubcategory(
 ): AsyncGenerator<RawProduct> {
   const vus = new Set<string>();
 
-  for (let page = 1; page <= PAGE_CAP; page++) {
-    if (ctx.signal.aborted || restant.pages <= 0 || restant.produits <= 0) return;
+  /**
+   * ON REPREND OU LE PASSAGE PRECEDENT S'EST ARRETE.
+   *
+   * Repartir de la page 1 a chaque cycle voulait dire ne relever que la tete
+   * de chaque rayon. Sur 23 000 produits, la queue n'avait aucun releve de
+   * prix — et rien ne le signalait, puisque le passage se terminait « ok ».
+   */
+  let page = pageDeReprise(NEWEGG_ID, String(id)).page;
+  let fin = false;
 
-    const url = `${BASE}/x/SubCategory/ID-${id}${page > 1 ? `?page=${page}` : ''}`;
-    let html: string;
-    try {
-      html = await ctx.getText(url);
-    } catch {
-      return; // un rayon momentanément indisponible ne doit pas tout arrêter
+  try {
+    for (; page <= PAGE_CAP; page++) {
+      if (ctx.signal.aborted || restant.pages <= 0 || restant.produits <= 0) return;
+
+      const url = `${BASE}/x/SubCategory/ID-${id}${page > 1 ? `?page=${page}` : ''}`;
+      let html: string;
+      try {
+        html = await ctx.getText(url);
+      } catch {
+        return; // un rayon momentanément indisponible ne doit pas tout arrêter
+      }
+      restant.pages--;
+
+      const etat = extractState(html);
+      const produits = etat?.Products ?? [];
+      if (produits.length === 0) {
+        fin = true;
+        return;
+      }
+
+      let nouveaux = 0;
+      for (const p of produits) {
+        const c = p.ItemCell;
+        if (!c) continue;
+        if (vus.has(c.Item)) continue;
+        vus.add(c.Item);
+        nouveaux++;
+
+        const raw = toRawProduct(c, slug);
+        if (!raw) continue;
+        yield raw;
+        if (--restant.produits <= 0) return;
+      }
+
+      // Passé le mur, Newegg resert les mêmes articles. Une page entièrement
+      // composée de doublons signale qu'on tourne en rond : on s'arrête là
+      // plutôt que de dépenser des requêtes pour rien.
+      //
+      // Les deux cas signifient « rayon epuise » : le curseur repart de la
+      // page 1 au prochain tour, sans quoi il resterait bloque sur une page
+      // qui ne rend plus rien.
+      if (nouveaux === 0 || page * PAGE_SIZE >= (etat?.TotalItemCount ?? 0)) {
+        fin = true;
+        page++; // la page courante a bien ete lue
+        return;
+      }
     }
-    restant.pages--;
-
-    const etat = extractState(html);
-    const produits = etat?.Products ?? [];
-    if (produits.length === 0) return;
-
-    let nouveaux = 0;
-    for (const p of produits) {
-      const c = p.ItemCell;
-      if (!c) continue;
-      if (vus.has(c.Item)) continue;
-      vus.add(c.Item);
-      nouveaux++;
-
-      const raw = toRawProduct(c, slug);
-      if (!raw) continue;
-      yield raw;
-      if (--restant.produits <= 0) return;
-    }
-
-    // Passé le mur, Newegg resert les mêmes articles. Une page entièrement
-    // composée de doublons signale qu'on tourne en rond : on s'arrête là
-    // plutôt que de dépenser des requêtes pour rien.
-    if (nouveaux === 0) return;
-    if (page * PAGE_SIZE >= (etat?.TotalItemCount ?? 0)) return;
+    fin = true; // mur de pagination atteint
+  } finally {
+    // `finally` parce qu'un generateur abandonne par son consommateur — budget
+    // epuise, temps ecoule — ne repasse pas par la fin du corps. C'est
+    // precisement le cas ou l'avancement doit etre retenu.
+    avancerCurseur(NEWEGG_ID, String(id), page, fin);
   }
 }
 
@@ -345,7 +377,9 @@ async function* crawlIds(
 ): AsyncGenerator<RawProduct> {
   const restant = { produits: ctx.limits.maxProducts, pages: ctx.limits.maxPages };
 
-  for (const id of ids) {
+  // Du MOINS couvert au plus couvert : un rayon deja termine ne doit pas
+  // reprendre le budget avant que ses voisins aient ete vus une seule fois.
+  for (const id of parCouverture(ids, (i) => String(i), curseursDe(NEWEGG_ID))) {
     if (ctx.signal.aborted || restant.produits <= 0 || restant.pages <= 0) return;
     const avant = restant.produits;
     yield* crawlSubcategory(id, slug, ctx, restant);
