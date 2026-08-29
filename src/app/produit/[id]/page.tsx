@@ -9,9 +9,12 @@ import {
   categoryRank,
   topDeals,
 } from '@/lib/db/queries';
-import { extractSpecs, leadSentence, SPEC_GROUP_LABEL, type Spec } from '@/lib/specs';
+import { leadSentence } from '@/lib/specs';
+import { analyzeComponents } from '@/lib/quality/components';
+import { ComponentAnalysis } from '@/components/ComponentAnalysis';
 import { categoryName } from '@/lib/categories';
 import { ScoreBadge, ConfidenceLabel } from '@/components/ScoreBadge';
+import { DiscountBadge } from '@/components/DiscountBadge';
 import { PriceChart } from '@/components/PriceChart';
 import { DealGrid } from '@/components/DealCard';
 import { ProductImage } from '@/components/ProductImage';
@@ -41,7 +44,11 @@ export default async function ProductPage({
   const alternatives = betterAlternatives(product);
   const face = comparables(product);
   const rang = categoryRank(product);
-  const specs = extractSpecs(product.title, product.description);
+  const composantes = analyzeComponents(
+    product.title,
+    product.description,
+    product.categorySlug,
+  );
   const accroche = leadSentence(product.description);
   const similar = product.categorySlug
     ? topDeals({ category: product.categorySlug, limit: 10 }).filter((d) => d.id !== product.id)
@@ -133,11 +140,18 @@ export default async function ProductPage({
               venait entièrement de là. On le signale plutôt que de laisser
               croire à une donnée périmée.
             */}
-            {product.dropVsMedian && product.dropVsMedian >= 0.03 && (
-              <span className="tnum rounded-lg bg-brand/15 px-2 py-1 text-sm font-bold text-brand">
-                −{Math.round(product.dropVsMedian * 100)} % sous le prix habituel
+            {product.dropVsMedian && product.dropVsMedian >= 0.03 ? (
+              <span className="flex items-center gap-2">
+                <DiscountBadge fraction={product.dropVsMedian} verified size="md" />
+                <span className="text-xs text-muted">sous le prix habituel</span>
               </span>
-            )}
+            ) : product.listPrice && product.listPrice > product.price ? (
+              <DiscountBadge
+                fraction={(product.listPrice - product.price) / product.listPrice}
+                verified={false}
+                size="md"
+              />
+            ) : null}
           </div>
 
           <div className="flex items-center gap-4 rounded-card border border-line bg-surface p-4">
@@ -166,7 +180,13 @@ export default async function ProductPage({
             </ul>
           )}
 
+          {/*
+            Tant qu'une disponibilite n'a pas ete REELLEMENT observee, on
+            n'affiche rien. Une affirmation fausse est indistinguable d'une
+            vraie pour le lecteur : mieux vaut le silence.
+          */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+            {AVAILABILITY_LABEL[product.availability] && (
             <span className="flex items-center gap-1.5 text-muted">
               <svg
                 viewBox="0 0 24 24"
@@ -178,8 +198,9 @@ export default async function ProductPage({
               >
                 <path d="M3 9h18M5 9V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3M5 9v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9" />
               </svg>
-              {AVAILABILITY_LABEL[product.availability] ?? 'Disponibilité inconnue'}
+              {AVAILABILITY_LABEL[product.availability]}
             </span>
+            )}
 
             {product.marketplace === 1 && (
               <span className="text-warm">
@@ -207,37 +228,16 @@ export default async function ProductPage({
         </div>
       </div>
 
-      {(accroche || specs.length > 0) && (
+      {accroche && (
         <section>
           <h2 className="mb-3 text-lg font-semibold tracking-tight">
             Ce qu&apos;il faut savoir
           </h2>
-
-          {accroche && (
-            <p className="max-w-3xl text-sm leading-relaxed text-muted">{accroche}</p>
-          )}
-
-          {specs.length > 0 && (
-            <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-              {specs.map((sp: Spec) => (
-                <div
-                  key={sp.label}
-                  className="rounded-card border border-line bg-surface px-4 py-3"
-                >
-                  <dt className="flex items-baseline justify-between gap-2">
-                    <span className="text-sm font-semibold text-text">{sp.label}</span>
-                    <span className="shrink-0 text-[10px] uppercase tracking-wide text-faint">
-                      {SPEC_GROUP_LABEL[sp.group]}
-                    </span>
-                  </dt>
-                  {/* L'important n'est pas la caracteristique, c'est ce qu'elle change. */}
-                  <dd className="mt-1 text-xs leading-relaxed text-muted">{sp.effect}</dd>
-                </div>
-              ))}
-            </dl>
-          )}
+          <p className="max-w-3xl text-sm leading-relaxed text-muted">{accroche}</p>
         </section>
       )}
+
+      {composantes.length > 0 && <ComponentAnalysis verdicts={composantes} />}
 
       <section>
         <h2 className="mb-3 text-lg font-semibold tracking-tight">Historique de prix</h2>
@@ -355,7 +355,9 @@ export default async function ProductPage({
 
       {face.length > 0 && (
         <section>
-          <h2 className="mb-1 text-lg font-semibold tracking-tight">Comparatif</h2>
+          <h2 className="mb-1 text-lg font-semibold tracking-tight">
+            Combien coûte au moins aussi bon ?
+          </h2>
           <p className="mb-3 text-sm text-muted">
             Combien coûte quelque chose d&apos;<strong className="text-text">au moins aussi bon</strong> ?
             Ces articles sont aussi bien notés ou mieux, à caractéristiques équivalentes,

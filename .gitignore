@@ -6,3 +6,4 @@ data/*.db-wal
 *.tsbuildinfo
 next-env.d.ts
 .env*.local
+.scratch/

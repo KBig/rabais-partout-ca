@@ -25,7 +25,7 @@ const PAGE_SIZE = 100;
  * IDs relevés et vérifiés directement sur l'API (certains sont alphabétiques).
  * Un slug peut pointer vers plusieurs rayons ; on déduplique par SKU au crawl.
  */
-const CATEGORY_MAP: Record<string, string[]> = {
+export const CATEGORY_MAP: Record<string, string[]> = {
   televiseurs: ['21344'],
   audio: ['20303', '23997', '12521201'],
   casques: ['21268'],

@@ -1,0 +1,879 @@
+
+> item-finder@0.1.0 crawl
+> tsx scripts/crawl.ts --store bestbuy-ca --all
+
+
+Best Buy — 78 tâche(s), 1.5 req/s
+
+▸ category:televiseurs
+  rayon 21344 -> 1868 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  … 1600 produits traités
+  ok — 1866 vus, 6 nouveaux, 3 changements de prix, 21 requêtes
+▸ category:audio
+  rayon 20303 : 2548 produits, au-dela du mur de 2000 -> descente dans 7 sous-rayon(s)
+  rayon 28817 -> 473 produits
+  … 400 produits traités
+  rayon 12066669 -> 133 produits
+  rayon 20318 -> 1194 produits
+  … 800 produits traités
+  … 1200 produits traités
+  … 1600 produits traités
+  rayon 20312 -> 174 produits
+  rayon 5364883 -> 335 produits
+  … 2000 produits traités
+  rayon 24930 -> 182 produits
+  … 2400 produits traités
+  rayon 20310 -> 59 produits
+  rayon 23997 : 5124 produits, au-dela du mur de 2000 -> descente dans 5 sous-rayon(s)
+  rayon 31843 -> 2690 produits
+  … 2800 produits traités
+  … 3200 produits traités
+  … 3600 produits traités
+  … 4000 produits traités
+  ok — 4000 vus, 42 nouveaux, 25 changements de prix, 60 requêtes
+▸ category:casques
+  rayon 21268 : 9588 produits, au-dela du mur de 2000 -> descente dans 4 sous-rayon(s)
+  rayon 24921 : 3390 produits, au-dela du mur de 2000 -> descente dans 2 sous-rayon(s)
+  rayon 22457275 -> 545 produits
+  … 400 produits traités
+  rayon 22457277 -> 2835 produits
+  … 800 produits traités
+  … 1200 produits traités
+  … 1600 produits traités
+  … 2000 produits traités
+  … 2400 produits traités
+  rayon 21270 -> 817 produits
+  … 2800 produits traités
+  … 3200 produits traités
+  rayon 21271 -> 1921 produits
+  … 3600 produits traités
+  … 4000 produits traités
+  ok — 4000 vus, 45 nouveaux, 30 changements de prix, 50 requêtes
+▸ category:cameras
+  rayon 20005 : 9886 produits, au-dela du mur de 2000 -> descente dans 5 sous-rayon(s)
+  rayon cameras : 2654 produits, au-dela du mur de 2000 -> descente dans 4 sous-rayon(s)
+  rayon 22474 -> 1113 produits
+  … 400 produits traités
+  … 800 produits traités
+  rayon 29157 -> 277 produits
+  … 1200 produits traités
+  rayon 29920 -> 973 produits
+  … 1600 produits traités
+  … 2000 produits traités
+  rayon 20274 -> 292 produits
+  … 2400 produits traités
+  rayon 29257 -> 1280 produits
+  … 2800 produits traités
+  … 3200 produits traités
+  … 3600 produits traités
+  rayon 20042 -> 837 produits
+  … 4000 produits traités
+  ok — 4000 vus, 7 nouveaux, 18 changements de prix, 55 requêtes
+▸ category:maison-intelligente
+  rayon 30438 : 5189 produits, au-dela du mur de 2000 -> descente dans 6 sous-rayon(s)
+  rayon 12751098 -> 191 produits
+  rayon 653827 -> 672 produits
+  … 400 produits traités
+  … 800 produits traités
+  rayon 27483 : 3040 produits, au-dela du mur de 2000 -> descente dans 5 sous-rayon(s)
+  rayon 33380p -> 1670 produits
+  … 1200 produits traités
+  … 1600 produits traités
+  … 2000 produits traités
+  … 2400 produits traités
+  rayon 35425 -> 233 produits
+  rayon 653835 -> 415 produits
+  … 2800 produits traités
+  rayon 35424 -> 235 produits
+  … 3200 produits traités
+  rayon 20363310 -> 488 produits
+  … 3600 produits traités
+  rayon 653841 -> 142 produits
+  … 4000 produits traités
+  ok — 4000 vus, 6 nouveaux, 5 changements de prix, 60 requêtes
+▸ category:portables
+  rayon 20352 : 14845 produits, au-dela du mur de 2000 -> descente dans 5 sous-rayon(s)
+  rayon 36711 -> 10641 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  … 1600 produits traités
+  rayon 12746015 -> 1990 produits
+  … 2000 produits traités
+  … 2400 produits traités
+  … 2800 produits traités
+  … 3200 produits traités
+  … 3600 produits traités
+  rayon 33933 -> 454 produits
+  … 4000 produits traités
+  ok — 4000 vus, 220 nouveaux, 85 changements de prix, 45 requêtes
+▸ category:ordinateurs
+  rayon 20213 : 7051 produits, au-dela du mur de 2000 -> descente dans 9 sous-rayon(s)
+  rayon 20217 -> 3774 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  … 1600 produits traités
+  … 2000 produits traités
+  rayon 30441 -> 2060 produits
+  … 2400 produits traités
+  … 2800 produits traités
+  … 3200 produits traités
+  … 3600 produits traités
+  … 4000 produits traités
+  ok — 4000 vus, 89 nouveaux, 7 changements de prix, 43 requêtes
+▸ category:moniteurs
+  rayon 20367 : 2374 produits, au-dela du mur de 2000 -> descente dans 4 sous-rayon(s)
+  rayon 474833 -> 1785 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  … 1600 produits traités
+  rayon 474835 -> 529 produits
+  … 2000 produits traités
+  rayon 26223 -> 14 produits
+  rayon 32352 -> 20 produits
+  ok — 2366 vus, 11 nouveaux, 10 changements de prix, 36 requêtes
+▸ category:composants
+  rayon 20374 : 6832 produits, au-dela du mur de 2000 -> descente dans 9 sous-rayon(s)
+  rayon 20397 -> 320 produits
+  rayon 29080 -> 206 produits
+  … 400 produits traités
+  rayon 29079 -> 709 produits
+  … 800 produits traités
+  … 1200 produits traités
+  rayon 30138 -> 566 produits
+  … 1600 produits traités
+  rayon 18637808 -> 1136 produits
+  … 2000 produits traités
+  … 2400 produits traités
+  … 2800 produits traités
+  rayon 20380 -> 1110 produits
+  … 3200 produits traités
+  … 3600 produits traités
+  … 4000 produits traités
+  ok — 4000 vus, 16 nouveaux, 36 changements de prix, 56 requêtes
+▸ category:stockage
+  rayon 20232 : 3392 produits, au-dela du mur de 2000 -> descente dans 9 sous-rayon(s)
+  rayon 30442 -> 173 produits
+  rayon 17233243 -> 627 produits
+  … 400 produits traités
+  rayon 20237 -> 286 produits
+  … 800 produits traités
+  rayon 20239 -> 536 produits
+  … 1200 produits traités
+  … 1600 produits traités
+  rayon 20106126 -> 15 produits
+  rayon 29487 -> 757 produits
+  … 2000 produits traités
+  rayon 29582 -> 131 produits
+  … 2400 produits traités
+  rayon 20236 -> 330 produits
+  … 2800 produits traités
+  rayon 29583 -> 543 produits
+  … 3200 produits traités
+  ok — 3391 vus, 4 nouveaux, 8 changements de prix, 58 requêtes
+▸ category:imprimantes
+  rayon 20330 : 2556 produits, au-dela du mur de 2000 -> descente dans 11 sous-rayon(s)
+  rayon 13267271 -> 32 produits
+  rayon 25113 -> 223 produits
+  rayon 25114 -> 324 produits
+  … 400 produits traités
+  rayon 23299053 -> 57 produits
+  rayon 29848 -> 240 produits
+  … 800 produits traités
+  rayon 21127 -> 148 produits
+  rayon 29765 -> 133 produits
+  rayon 27872871 -> 728 produits
+  … 1200 produits traités
+  … 1600 produits traités
+  rayon 21201 -> 379 produits
+  … 2000 produits traités
+  rayon 21125 -> 4 produits
+  rayon 26095 -> 287 produits
+  … 2400 produits traités
+  ok — 2552 vus, 3 nouveaux, 1 changements de prix, 55 requêtes
+▸ category:reseau
+  rayon 21099 : 9238 produits, au-dela du mur de 2000 -> descente dans 8 sous-rayon(s)
+  rayon 4032341 -> 118 produits
+  rayon 26055 -> 504 produits
+  … 400 produits traités
+  rayon 21111 -> 157 produits
+  rayon 30337 -> 331 produits
+  … 800 produits traités
+  rayon 26056 -> 231 produits
+  … 1200 produits traités
+  rayon 22579 -> 1688 produits
+  … 1600 produits traités
+  … 2000 produits traités
+  … 2400 produits traités
+  … 2800 produits traités
+  rayon 26037 : 6178 produits, au-dela du mur de 2000 -> descente dans 6 sous-rayon(s)
+  rayon 32282a : 4840 produits, au-dela du mur de 2000 -> descente dans 3 sous-rayon(s)
+  … 3200 produits traités
+  … 3600 produits traités
+  … 4000 produits traités
+  ok — 4000 vus, 8 nouveaux, 1 changements de prix, 59 requêtes
+▸ category:telephones
+  rayon 743355 : 4598 produits, au-dela du mur de 2000 -> descente dans 9 sous-rayon(s)
+  rayon 743358 : 2145 produits, au-dela du mur de 2000 -> descente dans 37 sous-rayon(s)
+  rayon 27570520 -> 12 produits
+  rayon 26520277 -> 55 produits
+  rayon 26520270 -> 45 produits
+  rayon 26520399 -> 63 produits
+  rayon 26520378 -> 38 produits
+  rayon 25653351 -> 39 produits
+  rayon 23869193 -> 59 produits
+  rayon 23869196 -> 94 produits
+  … 400 produits traités
+  rayon 23869198 -> 64 produits
+  rayon 23869200 -> 99 produits
+  rayon 22668481 -> 78 produits
+  rayon 22668483 -> 111 produits
+  rayon 22668485 -> 82 produits
+  … 800 produits traités
+  rayon 22668487 -> 87 produits
+  rayon 22267939 -> 69 produits
+  rayon 22267941 -> 98 produits
+  rayon 22267944 -> 114 produits
+  … 1200 produits traités
+  rayon 22267946 -> 126 produits
+  rayon 22267948 -> 75 produits
+  ok — 1326 vus, 5 nouveaux, 167 changements de prix, 60 requêtes
+▸ category:telephones-forfait
+  rayon 696304 : 2660 produits, au-dela du mur de 2000 -> descente dans 5 sous-rayon(s)
+  rayon 36586 -> 1268 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  rayon 505988 -> 798 produits
+  … 1600 produits traités
+  … 2000 produits traités
+  rayon 1738450 -> 587 produits
+  … 2400 produits traités
+  rayon 35956 -> 6 produits
+  rayon 35958 -> 1 produits
+  rayon 743456 -> 31 produits
+  ok — 2646 vus, 0 nouveaux, 3 changements de prix, 43 requêtes
+▸ category:tablettes
+  rayon 30297 : 2978 produits, au-dela du mur de 2000 -> descente dans 5 sous-rayon(s)
+  rayon 29059 -> 1751 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  … 1600 produits traités
+  rayon 20356 -> 775 produits
+  … 2000 produits traités
+  … 2400 produits traités
+  rayon 31040 -> 58 produits
+  rayon 26407685 -> 24 produits
+  rayon 28383 -> 372 produits
+  … 2800 produits traités
+  ok — 2960 vus, 4 nouveaux, 47 changements de prix, 43 requêtes
+▸ category:montres
+  rayon 34444 : 26684 produits, au-dela du mur de 2000 -> descente dans 6 sous-rayon(s)
+  rayon 661054 : 16440 produits, au-dela du mur de 2000 -> descente dans 2 sous-rayon(s)
+  rayon 35439 -> 2496 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  … 1600 produits traités
+  … 2000 produits traités
+  rayon 37542 -> 13943 produits
+  … 2400 produits traités
+  … 2800 produits traités
+  … 3200 produits traités
+  … 3600 produits traités
+  … 4000 produits traités
+  ok — 4000 vus, 54 nouveaux, 21 changements de prix, 44 requêtes
+▸ category:jeux-video
+  rayon 26516 : 10262 produits, au-dela du mur de 2000 -> descente dans 11 sous-rayon(s)
+  rayon 621715 : 3061 produits, au-dela du mur de 2000 -> descente dans 6 sous-rayon(s)
+  rayon 17582853 -> 1454 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  rayon 15303211 -> 1369 produits
+  … 1600 produits traités
+  … 2000 produits traités
+  … 2400 produits traités
+  … 2800 produits traités
+  rayon 37453 -> 8 produits
+  rayon 24334 -> 172 produits
+  rayon 31917 -> 33 produits
+  rayon 22667 -> 25 produits
+  rayon 621915 : 3583 produits, au-dela du mur de 2000 -> descente dans 5 sous-rayon(s)
+  rayon 15303209 : 2915 produits, au-dela du mur de 2000 -> descente dans 3 sous-rayon(s)
+  … 3200 produits traités
+  … 3600 produits traités
+  ok — 3956 vus, 0 nouveaux, 1 changements de prix, 60 requêtes
+▸ category:playstation
+  rayon 621715 : 3061 produits, au-dela du mur de 2000 -> descente dans 6 sous-rayon(s)
+  rayon 17582853 -> 1454 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  rayon 15303211 -> 1369 produits
+  … 1600 produits traités
+  … 2000 produits traités
+  … 2400 produits traités
+  … 2800 produits traités
+  rayon 37453 -> 8 produits
+  rayon 24334 -> 172 produits
+  rayon 31917 -> 33 produits
+  rayon 22667 -> 25 produits
+  ok — 3061 vus, 0 nouveaux, 0 changements de prix, 47 requêtes
+▸ category:nintendo
+  rayon 621915 : 3583 produits, au-dela du mur de 2000 -> descente dans 5 sous-rayon(s)
+  rayon 15303209 : 2915 produits, au-dela du mur de 2000 -> descente dans 3 sous-rayon(s)
+  rayon 3457140 -> 95 produits
+  rayon 3457863 -> 1819 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  … 1600 produits traités
+  rayon 3458023 -> 1001 produits
+  … 2000 produits traités
+  … 2400 produits traités
+  … 2800 produits traités
+  rayon 25813234 -> 369 produits
+  … 3200 produits traités
+  rayon 13274187 -> 16 produits
+  rayon 621894 -> 164 produits
+  rayon 621901 -> 119 produits
+  ok — 3583 vus, 0 nouveaux, 1 changements de prix, 56 requêtes
+▸ category:xbox
+  rayon 621746 -> 1574 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  ok — 1574 vus, 1 nouveaux, 0 changements de prix, 18 requêtes
+▸ category:pc-gaming
+  rayon 21132 -> 266 produits
+  ok — 266 vus, 0 nouveaux, 1 changements de prix, 5 requêtes
+▸ category:realite-virtuelle
+  rayon 1269307 -> 379 produits
+  ok — 379 vus, 0 nouveaux, 0 changements de prix, 6 requêtes
+▸ category:gros-electro
+  rayon 11962778 : 8786 produits, au-dela du mur de 2000 -> descente dans 7 sous-rayon(s)
+  rayon 494623 -> 51 produits
+  rayon 744633 -> 1413 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  rayon 34432 -> 280 produits
+  … 1600 produits traités
+  rayon 31224 : 2175 produits, au-dela du mur de 2000 -> descente dans 5 sous-rayon(s)
+  rayon 36769p -> 962 produits
+  … 2000 produits traités
+  … 2400 produits traités
+  rayon 33923 -> 273 produits
+  … 2800 produits traités
+  rayon 36768 -> 145 produits
+  rayon 678961 -> 25 produits
+  rayon 33924 -> 769 produits
+  … 3200 produits traités
+  … 3600 produits traités
+  ok — 3919 vus, 2 nouveaux, 29 changements de prix, 60 requêtes
+▸ category:petits-electro
+  rayon 26522 : 6680 produits, au-dela du mur de 2000 -> descente dans 8 sous-rayon(s)
+  rayon 26549p -> 334 produits
+  rayon 748879 -> 394 produits
+  … 400 produits traités
+  rayon 748657 -> 305 produits
+  … 800 produits traités
+  rayon 31261 -> 333 produits
+  … 1200 produits traités
+  rayon 26547 -> 247 produits
+  … 1600 produits traités
+  rayon 748947 -> 224 produits
+  rayon 34431 -> 1949 produits
+  … 2000 produits traités
+  … 2400 produits traités
+  … 2800 produits traités
+  … 3200 produits traités
+  … 3600 produits traités
+  rayon 25838557 -> 1487 produits
+  … 4000 produits traités
+  ok — 4000 vus, 1 nouveaux, 15 changements de prix, 60 requêtes
+▸ category:aspirateurs
+  rayon 21372 : 19002 produits, au-dela du mur de 2000 -> descente dans 8 sous-rayon(s)
+  rayon 21374 -> 281 produits
+  rayon 21380 -> 148 produits
+  … 400 produits traités
+  rayon 30280 -> 405 produits
+  … 800 produits traités
+  rayon 749782 -> 307 produits
+  rayon 21376 -> 335 produits
+  … 1200 produits traités
+  rayon 21378 -> 140 produits
+  … 1600 produits traités
+  rayon 28678 -> 17281 produits
+  … 2000 produits traités
+  … 2400 produits traités
+  … 2800 produits traités
+  … 3200 produits traités
+  … 3600 produits traités
+  rayon 11883496 -> 102 produits
+  ok — 3719 vus, 39 nouveaux, 3 changements de prix, 58 requêtes
+▸ category:cuisine
+  rayon 30501 : 11868 produits, au-dela du mur de 2000 -> descente dans 8 sous-rayon(s)
+  rayon 31234 -> 1536 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  rayon 31229 -> 724 produits
+  … 1600 produits traités
+  … 2000 produits traités
+  rayon 34413 : 4849 produits, au-dela du mur de 2000 -> descente dans 9 sous-rayon(s)
+  rayon 34485 -> 80 produits
+  rayon 34480 -> 584 produits
+  … 2400 produits traités
+  … 2800 produits traités
+  rayon 34479 -> 155 produits
+  rayon 34543 -> 24 produits
+  rayon 34468 -> 873 produits
+  … 3200 produits traités
+  … 3600 produits traités
+  rayon 34482 -> 287 produits
+  ok — 3972 vus, 1 nouveaux, 3 changements de prix, 60 requêtes
+▸ category:literie
+  rayon 29937 : 2993 produits, au-dela du mur de 2000 -> descente dans 10 sous-rayon(s)
+  rayon 35940 -> 444 produits
+  … 400 produits traités
+  rayon 35939 -> 296 produits
+  rayon 35938 -> 296 produits
+  … 800 produits traités
+  rayon 29938p -> 986 produits
+  … 1200 produits traités
+  … 1600 produits traités
+  … 2000 produits traités
+  rayon 831593 -> 500 produits
+  … 2400 produits traités
+  rayon 10389547 -> 179 produits
+  rayon 10393329 -> 54 produits
+  rayon 35432 -> 29 produits
+  rayon 35429 -> 193 produits
+  … 2800 produits traités
+  rayon 37826 -> 16 produits
+  ok — 2977 vus, 19 nouveaux, 2 changements de prix, 54 requêtes
+▸ category:rangement
+  rayon 12110886 : 2526 produits, au-dela du mur de 2000 -> descente dans 1 sous-rayon(s)
+  rayon 12110893 -> 2526 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  … 1600 produits traités
+  … 2000 produits traités
+  ok — 2000 vus, 45 nouveaux, 78 changements de prix, 22 requêtes
+▸ category:luminaires
+  rayon 32447 : 17475 produits, au-dela du mur de 2000 -> descente dans 9 sous-rayon(s)
+  rayon 32127 -> 3346 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  … 1600 produits traités
+  … 2000 produits traités
+  rayon 33410 -> 1135 produits
+  … 2400 produits traités
+  … 2800 produits traités
+  rayon 10516707 -> 717 produits
+  … 3200 produits traités
+  … 3600 produits traités
+  rayon 33409 -> 169 produits
+  … 4000 produits traités
+  ok — 4000 vus, 2 nouveaux, 16 changements de prix, 49 requêtes
+▸ category:decoration
+  rayon 31700 : 15764 produits, au-dela du mur de 2000 -> descente dans 15 sous-rayon(s)
+  rayon 10061840 -> 625 produits
+  … 400 produits traités
+  rayon 11969209 : 4965 produits, au-dela du mur de 2000 -> descente dans 8 sous-rayon(s)
+  rayon 10061787 -> 117 produits
+  rayon 32476 -> 173 produits
+  … 800 produits traités
+  rayon 32475 -> 125 produits
+  rayon 11969211 -> 2432 produits
+  … 1200 produits traités
+  … 1600 produits traités
+  … 2000 produits traités
+  … 2400 produits traités
+  … 2800 produits traités
+  rayon 11969213 -> 57 produits
+  rayon 11969218 -> 21 produits
+  rayon 11969220 -> 665 produits
+  … 3200 produits traités
+  … 3600 produits traités
+  rayon 10061917 -> 1375 produits
+  ok — 3775 vus, 157 nouveaux, 229 changements de prix, 60 requêtes
+▸ category:meubles
+  rayon furniture : 36909 produits, au-dela du mur de 2000 -> descente dans 7 sous-rayon(s)
+  rayon salon : 10251 produits, au-dela du mur de 2000 -> descente dans 9 sous-rayon(s)
+  rayon 36761 -> 136 produits
+  rayon 33218 -> 1059 produits
+  … 400 produits traités
+  … 800 produits traités
+  rayon 36719a : 2213 produits, au-dela du mur de 2000 -> descente dans 6 sous-rayon(s)
+  … 1200 produits traités
+  … 1600 produits traités
+  … 2000 produits traités
+  … 2400 produits traités
+  … 2800 produits traités
+  … 3200 produits traités
+  rayon 37526 -> 751 produits
+  … 3600 produits traités
+  … 4000 produits traités
+  ok — 4000 vus, 63 nouveaux, 296 changements de prix, 60 requêtes
+▸ category:salon
+  rayon salon : 10251 produits, au-dela du mur de 2000 -> descente dans 9 sous-rayon(s)
+  rayon 36761 -> 136 produits
+  rayon 33218 -> 1059 produits
+  … 400 produits traités
+  … 800 produits traités
+  rayon 36719a : 2213 produits, au-dela du mur de 2000 -> descente dans 6 sous-rayon(s)
+  rayon 36719 -> 732 produits
+  … 1200 produits traités
+  … 1600 produits traités
+  rayon 36721 -> 208 produits
+  … 2000 produits traités
+  rayon 37525 -> 155 produits
+  rayon 36722 -> 410 produits
+  … 2400 produits traités
+  rayon 36723 -> 443 produits
+  … 2800 produits traités
+  rayon 32463 -> 266 produits
+  … 3200 produits traités
+  rayon 37526 -> 751 produits
+  ok — 3598 vus, 0 nouveaux, 0 changements de prix, 60 requêtes
+▸ category:chambre
+  rayon bedroom : 6874 produits, au-dela du mur de 2000 -> descente dans 8 sous-rayon(s)
+  rayon 36757 -> 51 produits
+  rayon 13171097 : 3729 produits, au-dela du mur de 2000 -> descente dans 6 sous-rayon(s)
+  rayon 31828 -> 2151 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  … 1600 produits traités
+  … 2000 produits traités
+  rayon 35421 -> 8 produits
+  rayon 32454 -> 446 produits
+  … 2400 produits traités
+  rayon 37544 -> 8 produits
+  rayon 32457 -> 1063 produits
+  … 2800 produits traités
+  … 3200 produits traités
+  rayon 35423 -> 53 produits
+  … 3600 produits traités
+  rayon 32455 -> 1090 produits
+  … 4000 produits traités
+  ok — 4000 vus, 14 nouveaux, 285 changements de prix, 60 requêtes
+▸ category:salle-a-manger
+  rayon 33448 : 8428 produits, au-dela du mur de 2000 -> descente dans 8 sous-rayon(s)
+  rayon 37527 -> 595 produits
+  … 400 produits traités
+  rayon 32459 -> 1812 produits
+  … 800 produits traités
+  … 1200 produits traités
+  … 1600 produits traités
+  … 2000 produits traités
+  rayon 32460 -> 684 produits
+  … 2400 produits traités
+  … 2800 produits traités
+  rayon 35931 -> 163 produits
+  … 3200 produits traités
+  rayon 32461 -> 2170 produits
+  … 3600 produits traités
+  … 4000 produits traités
+  ok — 4000 vus, 122 nouveaux, 110 changements de prix, 51 requêtes
+▸ category:bureau-meubles
+  rayon bureau : 9842 produits, au-dela du mur de 2000 -> descente dans 7 sous-rayon(s)
+  rayon 32468 -> 3893 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  … 1600 produits traités
+  … 2000 produits traités
+  rayon 32469 -> 2368 produits
+  … 2400 produits traités
+  … 2800 produits traités
+  … 3200 produits traités
+  … 3600 produits traités
+  rayon 634093 -> 35 produits
+  rayon 32464 -> 2127 produits
+  … 4000 produits traités
+  ok — 4000 vus, 269 nouveaux, 329 changements de prix, 49 requêtes
+▸ category:outils
+  rayon 31699 : 6567 produits, au-dela du mur de 2000 -> descente dans 10 sous-rayon(s)
+  rayon 32144 : 4033 produits, au-dela du mur de 2000 -> descente dans 5 sous-rayon(s)
+  rayon 21593304 -> 56 produits
+  rayon 21593309 -> 69 produits
+  rayon 21593315 -> 85 produits
+  rayon 21593319 -> 137 produits
+  rayon 21593327 -> 3687 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  … 1600 produits traités
+  … 2000 produits traités
+  rayon 32143 -> 576 produits
+  … 2400 produits traités
+  … 2800 produits traités
+  rayon 31840 -> 256 produits
+  rayon 31751 -> 434 produits
+  … 3200 produits traités
+  … 3600 produits traités
+  rayon 32249 -> 57 produits
+  rayon 31836 -> 23 produits
+  ok — 3669 vus, 67 nouveaux, 4 changements de prix, 60 requêtes
+▸ category:jardinage
+  rayon 29757 : 23656 produits, au-dela du mur de 2000 -> descente dans 8 sous-rayon(s)
+  rayon 34414 : 11558 produits, au-dela du mur de 2000 -> descente dans 8 sous-rayon(s)
+  rayon 32124 -> 3605 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  … 1600 produits traités
+  … 2000 produits traités
+  rayon 34506 -> 4176 produits
+  … 2400 produits traités
+  … 2800 produits traités
+  … 3200 produits traités
+  … 3600 produits traités
+  … 4000 produits traités
+  ok — 4000 vus, 80 nouveaux, 6 changements de prix, 44 requêtes
+▸ category:jouets
+  rayon 21361 : 34066 produits, au-dela du mur de 2000 -> descente dans 12 sous-rayon(s)
+  rayon 629277 -> 1170 produits
+  … 400 produits traités
+  … 800 produits traités
+  rayon 22102 -> 639 produits
+  … 1200 produits traités
+  … 1600 produits traités
+  rayon 22104 : 4611 produits, au-dela du mur de 2000 -> descente dans 4 sous-rayon(s)
+  rayon 22105 -> 1630 produits
+  … 2000 produits traités
+  … 2400 produits traités
+  … 2800 produits traités
+  … 3200 produits traités
+  rayon 35948 -> 1653 produits
+  … 3600 produits traités
+  … 4000 produits traités
+  ok — 4000 vus, 2 nouveaux, 3 changements de prix, 51 requêtes
+▸ category:lego
+  rayon 629277 -> 1170 produits
+  … 400 produits traités
+  … 800 produits traités
+  ok — 1170 vus, 0 nouveaux, 0 changements de prix, 14 requêtes
+▸ category:jeux-societe
+  rayon 22104 : 4611 produits, au-dela du mur de 2000 -> descente dans 4 sous-rayon(s)
+  rayon 22105 -> 1630 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  … 1600 produits traités
+  rayon 35948 -> 1653 produits
+  … 2000 produits traités
+  … 2400 produits traités
+  … 2800 produits traités
+  … 3200 produits traités
+  rayon 33427 -> 269 produits
+  rayon 32297 -> 1059 produits
+  … 3600 produits traités
+  … 4000 produits traités
+  ok — 4000 vus, 0 nouveaux, 0 changements de prix, 50 requêtes
+▸ category:jouets-enfants
+  rayon 22519066 : 6470 produits, au-dela du mur de 2000 -> descente dans 7 sous-rayon(s)
+  rayon 36724p -> 839 produits
+  … 400 produits traités
+  … 800 produits traités
+  rayon 27097 -> 4397 produits
+  … 1200 produits traités
+  … 1600 produits traités
+  … 2000 produits traités
+  … 2400 produits traités
+  … 2800 produits traités
+  rayon 10849015 -> 395 produits
+  … 3200 produits traités
+  rayon 9042162 -> 192 produits
+  rayon 32228 -> 514 produits
+  … 3600 produits traités
+  rayon 31804 -> 66 produits
+  … 4000 produits traités
+  ok — 4000 vus, 96 nouveaux, 0 changements de prix, 53 requêtes
+▸ category:jouets-exterieur
+  rayon 317241 -> 1628 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  … 1600 produits traités
+  ok — 1627 vus, 1 nouveaux, 0 changements de prix, 19 requêtes
+▸ category:modelisme
+  rayon 35946 : 2711 produits, au-dela du mur de 2000 -> descente dans 7 sous-rayon(s)
+  rayon 32298 -> 53 produits
+  rayon 318812 -> 29 produits
+  rayon 9043159 -> 3 produits
+  rayon 35951 -> 2568 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  … 1600 produits traités
+  … 2000 produits traités
+  rayon 35952 -> 55 produits
+  rayon 35949 -> 1 produits
+  rayon 35950 -> 2 produits
+  rayon 22102 -> 639 produits
+  … 2400 produits traités
+  ok — 2782 vus, 8 nouveaux, 0 changements de prix, 49 requêtes
+▸ category:fitness
+  rayon 882185 : 3173 produits, au-dela du mur de 2000 -> descente dans 4 sous-rayon(s)
+  rayon cardiotraining -> 579 produits
+  … 400 produits traités
+  rayon 34679 -> 1196 produits
+  … 800 produits traités
+  … 1200 produits traités
+  … 1600 produits traités
+  rayon 34680 -> 384 produits
+  … 2000 produits traités
+  rayon 34683 -> 1013 produits
+  … 2400 produits traités
+  … 2800 produits traités
+  ok — 3168 vus, 3 nouveaux, 6 changements de prix, 42 requêtes
+▸ category:sport
+  rayon sportsrecreation : 20269 produits, au-dela du mur de 2000 -> descente dans 14 sous-rayon(s)
+  rayon 19781810 -> 1019 produits
+  … 400 produits traités
+  … 800 produits traités
+  rayon 24742956 -> 171 produits
+  rayon 34423 : 3422 produits, au-dela du mur de 2000 -> descente dans 10 sous-rayon(s)
+  rayon 587468 -> 456 produits
+  … 1200 produits traités
+  … 1600 produits traités
+  rayon 587473 -> 197 produits
+  rayon 11878216 -> 12 produits
+  rayon 587475 -> 724 produits
+  … 2000 produits traités
+  … 2400 produits traités
+  rayon 587476 -> 622 produits
+  … 2800 produits traités
+  … 3200 produits traités
+  rayon 587927 -> 12 produits
+  rayon 11878341 -> 456 produits
+  … 3600 produits traités
+  ok — 3613 vus, 5 nouveaux, 0 changements de prix, 60 requêtes
+▸ category:mode
+  rayon 10159983 : 24708 produits, au-dela du mur de 2000 -> descente dans 9 sous-rayon(s)
+  rayon 34420 -> 1265 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  rayon 32497 : 6957 produits, au-dela du mur de 2000 -> descente dans 4 sous-rayon(s)
+  rayon 33429 -> 2677 produits
+  … 1600 produits traités
+  … 2000 produits traités
+  … 2400 produits traités
+  … 2800 produits traités
+  … 3200 produits traités
+  rayon 21996 -> 919 produits
+  … 3600 produits traités
+  … 4000 produits traités
+  ok — 4000 vus, 14 nouveaux, 2 changements de prix, 47 requêtes
+▸ category:bijoux
+  rayon 33198 : 16092 produits, au-dela du mur de 2000 -> descente dans 11 sous-rayon(s)
+  rayon 35438 -> 180 produits
+  rayon 33424 -> 3522 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  … 1600 produits traités
+  … 2000 produits traités
+  rayon 33422 -> 2696 produits
+  … 2400 produits traités
+  … 2800 produits traités
+  … 3200 produits traités
+  … 3600 produits traités
+  … 4000 produits traités
+  ok — 4000 vus, 0 nouveaux, 0 changements de prix, 46 requêtes
+▸ category:montres-mode
+  rayon 32497 : 6957 produits, au-dela du mur de 2000 -> descente dans 4 sous-rayon(s)
+  rayon 33429 -> 2677 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  … 1600 produits traités
+  … 2000 produits traités
+  rayon 21996 -> 919 produits
+  … 2400 produits traités
+  … 2800 produits traités
+  rayon 35440 -> 80 produits
+  rayon 5105623 -> 3276 produits
+  … 3200 produits traités
+  … 3600 produits traités
+  … 4000 produits traités
+  ok — 4000 vus, 0 nouveaux, 0 changements de prix, 49 requêtes
+▸ category:accessoires-mode
+  rayon 34420 -> 1265 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  ok — 1265 vus, 0 nouveaux, 0 changements de prix, 15 requêtes
+▸ category:vetements
+  rayon 10160017 -> 148 produits
+  rayon 10160020 -> 62 produits
+  ok — 210 vus, 0 nouveaux, 0 changements de prix, 7 requêtes
+▸ category:bagages
+  rayon 31698 : 5085 produits, au-dela du mur de 2000 -> descente dans 8 sous-rayon(s)
+  rayon 31698a -> 816 produits
+  … 400 produits traités
+  … 800 produits traités
+  rayon 31745 -> 18 produits
+  rayon 25223 -> 1506 produits
+  … 1200 produits traités
+  … 1600 produits traités
+  … 2000 produits traités
+  rayon 31859 -> 170 produits
+  … 2400 produits traités
+  rayon 32453 -> 600 produits
+  … 2800 produits traités
+  rayon 25227 -> 294 produits
+  … 3200 produits traités
+  rayon 32238 -> 586 produits
+  … 3600 produits traités
+  rayon 31707 -> 1095 produits
+  … 4000 produits traités
+  ok — 4000 vus, 20 nouveaux, 1 changements de prix, 60 requêtes
+▸ category:beaute-sante
+  rayon 882186 : 40451 produits, au-dela du mur de 2000 -> descente dans 9 sous-rayon(s)
+  rayon 27591208 -> 373 produits
+  rayon 27130 -> 858 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  rayon 34674 : 3373 produits, au-dela du mur de 2000 -> descente dans 8 sous-rayon(s)
+  rayon 34749 -> 474 produits
+  … 1600 produits traités
+  rayon 34747 -> 486 produits
+  … 2000 produits traités
+  rayon 27990438 -> 54 produits
+  rayon 34746 -> 416 produits
+  … 2400 produits traités
+  rayon 27592028 -> 23 produits
+  rayon 34750 -> 701 produits
+  … 2800 produits traités
+  … 3200 produits traités
+  rayon 34744 -> 570 produits
+  … 3600 produits traités
+  ok — 3685 vus, 1 nouveaux, 1 changements de prix, 60 requêtes
+▸ category:beaute-corps
+  rayon 882187 : 30322 produits, au-dela du mur de 2000 -> descente dans 13 sous-rayon(s)
+  rayon 822883 -> 16316 produits
+  … 400 produits traités
+  … 800 produits traités
+  … 1200 produits traités
+  … 1600 produits traités
+  … 2000 produits traités
+  rayon 21526781 -> 381 produits
+  rayon 21526785 -> 2300 produits
+  … 2400 produits traités
+  … 2800 produits traités

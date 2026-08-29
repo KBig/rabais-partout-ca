@@ -32,6 +32,31 @@ export interface Spec {
   effect: string;
   /** Regroupement pour l'affichage. */
   group: 'image' | 'performance' | 'audio' | 'usage' | 'connectivite';
+  /** Famille, reportée depuis la règle : sert au classement par gamme. */
+  family: string;
+
+  /**
+   * POSITION SUR UNE ÉCHELLE CONNUE, quand il en existe une.
+   *
+   * Une dalle OLED est meilleure qu'une QLED, un Ryzen 9 qu'un Ryzen 3 : ce
+   * sont des ordres établis, pas des opinions. On les écrit une fois.
+   */
+  rank?: number;
+  /** Nombre d'échelons de cette échelle, pour situer `rank`. */
+  scale?: number;
+
+  /**
+   * VALEUR NUMÉRIQUE COMPARABLE, quand aucune échelle absolue n'existe.
+   *
+   * « 16 Go » n'est ni bon ni mauvais dans l'absolu : tout dépend de ce que
+   * fait le reste du marché. Cette valeur est confrontée à la distribution
+   * réelle de sa catégorie, mesurée sur le catalogue.
+   */
+  metric?: number;
+  /** Unité, qui fait partie de la clé : des litres ne se comparent pas à des pi³. */
+  unit?: string;
+  /** Vrai quand une valeur BASSE est meilleure (temps de réponse). */
+  lowerIsBetter?: boolean;
 }
 
 interface SpecRule {
@@ -48,14 +73,59 @@ interface SpecRule {
   /** Testé sur le titre + la description, accents retirés, en minuscules. */
   match: RegExp;
   /** Construit la caractéristique à partir de la correspondance. */
-  build: (m: RegExpMatchArray) => Spec;
+  build: (m: RegExpMatchArray) => Omit<Spec, 'family'>;
+
+  /** Échelon occupé sur l'échelle de la famille (1 = le plus bas). */
+  rank?: number | ((m: RegExpMatchArray) => number | undefined);
+  /** Hauteur de l'échelle. Identique pour toutes les règles d'une famille. */
+  scale?: number;
+  /** Extrait la valeur à comparer au marché. */
+  metric?: (m: RegExpMatchArray) => number;
+  unit?: string;
+  lowerIsBetter?: boolean;
+
+  /**
+   * Categories ou la regle a un sens.
+   *
+   * « Aluminium » sur une casserole decrit ce qu'est l'objet ; sur un portable,
+   * ca ne decrit que la coque, et le classer « milieu de gamme » pour autant
+   * serait faux. Une regle qui ne s'applique pas partout doit le dire.
+   */
+  onlyIn?: ReadonlySet<string>;
 }
+
+/**
+ * Categories ou une mesure en pouces designe VRAIMENT une diagonale d'ecran.
+ *
+ * Ailleurs, « 30 po » est une largeur — celle d'une hotte, d'un meuble, d'un
+ * grill. L'appeler « diagonale » serait une affirmation fausse sur un produit
+ * qui n'a pas d'ecran.
+ */
+const CATEGORIES_ECRAN: ReadonlySet<string> = new Set([
+  'televiseurs', 'moniteurs', 'portables', 'ordinateurs', 'tablettes',
+  'telephones', 'telephones-forfait', 'pc-gaming', 'realite-virtuelle',
+]);
+
+/**
+ * Categories ou la matiere EST le produit : vaisselle, cuisson, mobilier,
+ * rangement. Ailleurs, le materiau cite dans un titre ne decrit qu'un detail
+ * de finition.
+ */
+const CATEGORIES_MATIERE: ReadonlySet<string> = new Set([
+  'cuisine', 'salle-a-manger', 'petits-electro', 'gros-electro', 'meubles',
+  'salon', 'chambre', 'bureau-meubles', 'rangement', 'rangement-bureau',
+  'decoration', 'literie', 'luminaires', 'jardinage', 'outils', 'animaux',
+  'habitat-animaux', 'accessoires-animaux', 'bebe', 'mobilier-bebe', 'bagages',
+  'sport', 'fitness',
+])
 
 const RULES: SpecRule[] = [
   // ------------------------------------------------------------------ image
   {
     family: 'resolution',
     match: /\b(?:8k)\b/,
+    rank: 4,
+    scale: 4,
     build: () => ({
       group: 'image',
       label: 'Résolution 8K',
@@ -66,6 +136,8 @@ const RULES: SpecRule[] = [
   {
     family: 'resolution',
     match: /\b(?:uhd|4k|2160p)\b/,
+    rank: 3,
+    scale: 4,
     build: () => ({
       group: 'image',
       label: 'Résolution 4K',
@@ -76,6 +148,8 @@ const RULES: SpecRule[] = [
   {
     family: 'resolution',
     match: /\b(?:qhd|wqhd|uwqhd|1440p)\b/,
+    rank: 2,
+    scale: 4,
     build: () => ({
       group: 'image',
       label: 'Résolution 1440p',
@@ -86,6 +160,8 @@ const RULES: SpecRule[] = [
   {
     family: 'resolution',
     match: /\b(?:fhd|1080p)\b|full ?hd/,
+    rank: 1,
+    scale: 4,
     build: () => ({
       group: 'image',
       label: 'Résolution 1080p',
@@ -96,6 +172,8 @@ const RULES: SpecRule[] = [
   {
     family: 'dalle',
     match: /\b(?:qd[- ]?oled|qd[- ]?delo)\b/,
+    rank: 4,
+    scale: 4,
     build: () => ({
       group: 'image',
       label: 'Dalle QD-OLED',
@@ -106,6 +184,8 @@ const RULES: SpecRule[] = [
   {
     family: 'dalle',
     match: /\b(?:oled|delo)\b/,
+    rank: 4,
+    scale: 4,
     build: () => ({
       group: 'image',
       label: 'Dalle OLED',
@@ -116,6 +196,8 @@ const RULES: SpecRule[] = [
   {
     family: 'dalle',
     match: /mini[- ]?(?:del|led)/,
+    rank: 3,
+    scale: 4,
     build: () => ({
       group: 'image',
       label: 'Rétroéclairage mini-DEL',
@@ -126,6 +208,8 @@ const RULES: SpecRule[] = [
   {
     family: 'dalle',
     match: /\bqled\b/,
+    rank: 2,
+    scale: 4,
     build: () => ({
       group: 'image',
       label: 'Dalle QLED',
@@ -136,6 +220,8 @@ const RULES: SpecRule[] = [
   {
     family: 'rafraichissement',
     match: /\b(\d{2,3})\s?hz\b/,
+    metric: (m) => Number(m[1]),
+    unit: 'Hz',
     build: (m) => {
       const hz = Number(m[1]);
       return {
@@ -153,6 +239,10 @@ const RULES: SpecRule[] = [
   {
     family: 'reponse',
     match: /\b(0[,.]\d{1,2})\s?ms\b/,
+    metric: (m) => Number(m[1].replace(',', '.')),
+    unit: 'ms',
+    // Un temps de reponse plus COURT est meilleur : l'echelle s'inverse.
+    lowerIsBetter: true,
     build: (m) => ({
       group: 'image',
       label: `Temps de réponse ${m[1]} ms`,
@@ -182,11 +272,27 @@ const RULES: SpecRule[] = [
   },
   {
     family: 'diagonale',
+    onlyIn: CATEGORIES_ECRAN,
     match: /\b(\d{2,3})\s*(?:po|pouces?)\b/,
+    metric: (m) => Number(m[1]),
+    unit: 'po',
     build: (m) => ({
       group: 'image',
       label: `Diagonale ${m[1]} po`,
       effect: `Mesurée en diagonale, coin à coin. Compte autant que la résolution : plus l’écran est grand, plus il faut de pixels pour rester net.`,
+    }),
+  },
+  {
+    // Hors ecran, la meme mesure existe et reste utile — c'est un encombrement.
+    family: 'diagonale',
+    match: /\b(\d{2,3})\s*(?:po|pouces?)\b/,
+    metric: (m) => Number(m[1]),
+    unit: 'po',
+    build: (m) => ({
+      group: 'usage',
+      label: `Format ${m[1]} po`,
+      effect:
+        'Dimension principale de l’appareil. À vérifier contre l’espace disponible avant tout le reste : un modèle qui ne rentre pas ne sert à rien.',
     }),
   },
 
@@ -194,6 +300,13 @@ const RULES: SpecRule[] = [
   {
     family: 'gpu',
     match: /\b(?:rtx|gtx)\s?(\d{4})/,
+    // Le dernier couple de chiffres donne le positionnement dans la gamme :
+    // x090 et x080 en haut, x050 en bas. C'est la convention du fabricant.
+    rank: (m) => {
+      const rang = Number(m[1]) % 100;
+      return rang >= 80 ? 4 : rang >= 70 ? 3 : rang >= 60 ? 2 : 1;
+    },
+    scale: 4,
     build: (m) => {
       const n = Number(m[1]);
       const rang = n % 100;
@@ -212,6 +325,8 @@ const RULES: SpecRule[] = [
   {
     family: 'cpu',
     match: /\bryzen\s?([3579])\b/,
+    rank: (m) => (Number(m[1]) - 1) / 2,
+    scale: 4,
     build: (m) => ({
       group: 'performance',
       label: `Processeur Ryzen ${m[1]}`,
@@ -224,6 +339,8 @@ const RULES: SpecRule[] = [
   {
     family: 'cpu',
     match: /\b(?:core\s?)?i([3579])[\s-]/,
+    rank: (m) => (Number(m[1]) - 1) / 2,
+    scale: 4,
     build: (m) => ({
       group: 'performance',
       label: `Processeur Core i${m[1]}`,
@@ -236,6 +353,8 @@ const RULES: SpecRule[] = [
   {
     family: 'ram',
     match: /\b(?:ram|m[ée]moire)\s*(?:de\s*)?(\d{1,3})\s*(?:go|gb)\b|\b(\d{1,3})\s*(?:go|gb)\s*(?:de\s*)?(?:ram|ddr\d)/,
+    metric: (m) => Number(m[1] ?? m[2]),
+    unit: 'Go',
     build: (m) => {
       const go = Number(m[1] ?? m[2]);
       return {
@@ -253,6 +372,8 @@ const RULES: SpecRule[] = [
   {
     family: 'stockage-type',
     match: /\b(?:ssd|nvme)\b/,
+    rank: 2,
+    scale: 2,
     build: () => ({
       group: 'performance',
       label: 'Stockage SSD',
@@ -263,6 +384,8 @@ const RULES: SpecRule[] = [
   {
     family: 'stockage-taille',
     match: /\b(\d)\s*(?:to|tb)\b/,
+    metric: (m) => Number(m[1]),
+    unit: 'To',
     build: (m) => ({
       group: 'performance',
       label: `Capacité ${m[1]} To`,
@@ -293,6 +416,8 @@ const RULES: SpecRule[] = [
   {
     family: 'autonomie',
     match: /\b(\d{1,2})\s*(?:h|heures)\s*(?:d[’']autonomie|de lecture|d[’'][ée]coute)/,
+    metric: (m) => Number(m[1]),
+    unit: 'h',
     build: (m) => ({
       group: 'audio',
       label: `Autonomie ${m[1]} h`,
@@ -324,6 +449,8 @@ const RULES: SpecRule[] = [
   {
     family: 'wifi',
     match: /\bwi-?fi\s?(6e|6|7)\b/,
+    rank: (m) => (m[1] === '7' ? 3 : m[1] === '6e' ? 2 : 1),
+    scale: 3,
     build: (m) => ({
       group: 'connectivite',
       label: `Wi-Fi ${m[1]}`,
@@ -333,6 +460,14 @@ const RULES: SpecRule[] = [
   {
     family: 'bluetooth',
     match: /\bbluetooth\s?(\d[.\d]*)?/,
+    // Sans numero de version annonce, on ne classe PAS : ne rien savoir
+    // n'est pas la meme chose qu'etre en bas de gamme.
+    rank: (m) => {
+      const v = m[1] ? parseFloat(m[1]) : NaN;
+      if (!Number.isFinite(v)) return undefined;
+      return v >= 5.3 ? 3 : v >= 5 ? 2 : 1;
+    },
+    scale: 3,
     build: (m) => ({
       group: 'connectivite',
       label: m[1] ? `Bluetooth ${m[1]}` : 'Bluetooth',
@@ -342,6 +477,8 @@ const RULES: SpecRule[] = [
   {
     family: 'hdmi',
     match: /\bhdmi\s?2\.1\b/,
+    rank: 2,
+    scale: 2,
     build: () => ({
       group: 'connectivite',
       label: 'HDMI 2.1',
@@ -363,6 +500,8 @@ const RULES: SpecRule[] = [
   {
     family: 'capacite',
     match: /\b(\d{1,2}[,.]?\d?)\s*(?:l|litres?)\b/,
+    metric: (m) => Number(m[1].replace(',', '.')),
+    unit: 'L',
     build: (m) => ({
       group: 'usage',
       label: `Capacité ${m[1]} L`,
@@ -372,10 +511,255 @@ const RULES: SpecRule[] = [
   {
     family: 'capacite',
     match: /\b(\d{1,2}[,.]?\d?)\s*pi[³3]\b/,
+    metric: (m) => Number(m[1].replace(',', '.')),
+    unit: 'pi3',
     build: (m) => ({
       group: 'usage',
       label: `Capacité ${m[1]} pi³`,
       effect: 'Volume intérieur. Un réfrigérateur de 18 pi³ convient en général à un foyer de trois à quatre personnes.',
+    }),
+  },
+
+  // ------------------------------------------------ materiaux et fabrication
+  //
+  // Le materiau est souvent la SEULE difference reelle entre deux articles de
+  // cuisine ou de table au meme prix. Une assiette en porcelaine et une en
+  // melamine ne vieillissent pas du tout pareil, et rien dans le titre ne le
+  // signale a qui ne connait pas les termes.
+  {
+    family: 'materiau',
+    onlyIn: CATEGORIES_MATIERE,
+    match: /fonte [ée]maill[ée]e?|\bfonte\b/,
+    rank: 4,
+    scale: 4,
+    build: () => ({
+      group: 'usage',
+      label: 'Fonte',
+      effect:
+        'Tres lourde, elle emmagasine la chaleur et la restitue longtemps : saisie reguliere et cuisson lente. Se garde des decennies.',
+    }),
+  },
+  {
+    family: 'materiau',
+    onlyIn: CATEGORIES_MATIERE,
+    match: /acier inoxydable|\binox\b/,
+    rank: 4,
+    scale: 4,
+    build: () => ({
+      group: 'usage',
+      label: 'Acier inoxydable',
+      effect:
+        'Ne rouille pas, ne retient pas les odeurs et supporte le lave-vaisselle. Plus durable que l’aluminium ou le plastique, et plus lourd.',
+    }),
+  },
+  {
+    family: 'materiau',
+    onlyIn: CATEGORIES_MATIERE,
+    match: /porcelaine|c[ée]ramique|\bgr[èe]s\b|verre tremp[ée]/,
+    rank: 3,
+    scale: 4,
+    build: () => ({
+      group: 'usage',
+      label: 'Porcelaine, ceramique ou verre trempe',
+      effect:
+        'Surface non poreuse : ne se tache pas et ne garde pas le gout. Resiste au lave-vaisselle, mais casse en cas de choc.',
+    }),
+  },
+  {
+    family: 'materiau',
+    onlyIn: CATEGORIES_MATIERE,
+    match: /\bbambou\b|bois massif|\bacacia\b|\bch[êe]ne\b|\bnoyer\b/,
+    rank: 2,
+    scale: 4,
+    build: () => ({
+      group: 'usage',
+      label: 'Bois ou bambou',
+      effect:
+        'Agreable et solide, mais poreux : lavage a la main et huilage occasionnel, sinon il se fend.',
+    }),
+  },
+  {
+    family: 'materiau',
+    onlyIn: CATEGORIES_MATIERE,
+    match: /\baluminium\b/,
+    rank: 2,
+    scale: 4,
+    build: () => ({
+      group: 'usage',
+      label: 'Aluminium',
+      effect:
+        'Leger et chauffe vite, mais se deforme et se raye plus facilement que l’acier. Souvent revetu pour compenser.',
+    }),
+  },
+  {
+    family: 'materiau',
+    onlyIn: CATEGORIES_MATIERE,
+    match: /m[ée]lamine|polypropyl[èe]ne|\bplastique\b|\bacrylique\b/,
+    rank: 1,
+    scale: 4,
+    build: () => ({
+      group: 'usage',
+      label: 'Plastique ou melamine',
+      effect:
+        'Leger, incassable et bon marche. Se raye vite, se decolore, et supporte mal la chaleur comme le passage repete au lave-vaisselle.',
+    }),
+  },
+  {
+    family: 'revetement',
+    onlyIn: CATEGORIES_MATIERE,
+    match: /antiadh[ée]si(?:f|ve)|\bteflon\b/,
+    build: () => ({
+      group: 'usage',
+      label: 'Revetement antiadhesif',
+      effect:
+        'Permet de cuire avec peu de gras et de nettoyer facilement. Le revetement s’use : il craint les ustensiles metalliques.',
+    }),
+  },
+
+  // -------------------------------------------- electromenagers et entretien
+  {
+    family: 'puissance',
+    match: /\b(\d{3,4})\s*(?:w|watts?)\b/,
+    metric: (m) => Number(m[1]),
+    unit: 'W',
+    build: (m) => ({
+      group: 'performance',
+      label: `Puissance ${m[1]} W`,
+      effect:
+        'Determine la vitesse de chauffe ou la force du moteur. Une puissance elevee travaille plus vite, pas forcement mieux.',
+    }),
+  },
+  {
+    family: 'aspiration',
+    match: /\b(\d{4,5})\s*pa\b/,
+    metric: (m) => Number(m[1]),
+    unit: 'Pa',
+    build: (m) => ({
+      group: 'performance',
+      label: `Aspiration ${m[1]} Pa`,
+      effect:
+        'Force de succion. C’est ce qui separe un appareil capable de sortir la poussiere d’un tapis d’un autre qui ne fait que la surface.',
+    }),
+  },
+  {
+    family: 'bruit',
+    match: /\b(\d{2})\s*dba\b|(?:niveau sonore|silencieux|bruit)[^.]{0,25}?(\d{2})\s*db\b/,
+    metric: (m) => Number(m[1] ?? m[2]),
+    unit: 'dB',
+    // Moins de bruit est mieux : l'echelle s'inverse.
+    lowerIsBetter: true,
+    build: (m) => ({
+      group: 'usage',
+      label: `Niveau sonore ${m[1] ?? m[2]} dB`,
+      effect:
+        'Chaque tranche de 10 dB double le bruit percu. Sous 45 dB, un appareil peut tourner dans une piece ouverte sans gener.',
+    }),
+  },
+  {
+    family: 'debit-air',
+    match: /\b(\d{3,4})\s*(?:pcm|cfm)\b/,
+    metric: (m) => Number(m[1]),
+    unit: 'PCM',
+    build: (m) => ({
+      group: 'performance',
+      label: `Debit d’air ${m[1]} PCM`,
+      effect:
+        'Volume d’air evacue par minute. C’est ce qui decide si les odeurs et la vapeur partent vraiment.',
+    }),
+  },
+  {
+    family: 'btu',
+    match: /\b(\d{1,3}[ ,]\d{3}|\d{4,6})\s*btu\b/,
+    metric: (m) => Number(m[1].replace(/[ ,]/g, '')),
+    unit: 'BTU',
+    build: (m) => ({
+      group: 'performance',
+      label: `${m[1]} BTU`,
+      effect:
+        'Puissance de chauffe ou de refroidissement. Se choisit selon la surface a traiter : trop peu ne suffit pas, trop cycle sans deshumidifier.',
+    }),
+  },
+  {
+    family: 'essorage',
+    match: /\b(\d{3,4})\s*(?:tr\/min|rpm)\b/,
+    metric: (m) => Number(m[1]),
+    unit: 'tr/min',
+    build: (m) => ({
+      group: 'performance',
+      label: `Essorage ${m[1]} tr/min`,
+      effect:
+        'Plus la vitesse est elevee, moins le linge sort humide, et moins la secheuse travaille ensuite.',
+    }),
+  },
+  {
+    family: 'filtration',
+    match: /\bhepa\b/,
+    build: () => ({
+      group: 'usage',
+      label: 'Filtre HEPA',
+      effect:
+        'Retient les particules fines, pollens et acariens au lieu de les rejeter dans la piece. Utile en cas d’allergies.',
+    }),
+  },
+  {
+    family: 'navigation',
+    match: /\blidar\b|cartographie (?:laser|intelligente)/,
+    build: () => ({
+      group: 'usage',
+      label: 'Cartographie laser',
+      effect:
+        'L’appareil construit un plan du logement et nettoie en bandes ordonnees, au lieu de rebondir au hasard. Difference majeure de couverture et de duree.',
+    }),
+  },
+  {
+    family: 'vidange',
+    match: /vidange automatique|auto[- ]?vidage|station de vidange/,
+    build: () => ({
+      group: 'usage',
+      label: 'Station de vidange automatique',
+      effect:
+        'Le bac se vide seul dans la base : quelques semaines d’autonomie au lieu d’un geste apres chaque passage.',
+    }),
+  },
+  {
+    family: 'couverts',
+    match: /\b(\d{1,2})\s*(?:couverts|places)\b/,
+    metric: (m) => Number(m[1]),
+    unit: 'couverts',
+    build: (m) => ({
+      group: 'usage',
+      label: `${m[1]} couverts`,
+      effect:
+        'Nombre de services complets par cycle. Un foyer de quatre personnes remplit environ 12 couverts.',
+    }),
+  },
+  {
+    family: 'etancheite',
+    match: /\bipx?(\d)\b/,
+    rank: (m) => {
+      const d = Number(m[1]);
+      return d >= 8 ? 4 : d >= 7 ? 3 : d >= 5 ? 2 : 1;
+    },
+    scale: 4,
+    build: (m) => ({
+      group: 'usage',
+      label: `Indice d’etancheite IP${m[1]}`,
+      effect:
+        Number(m[1]) >= 7
+          ? 'Resiste a l’immersion : la pluie, la sueur ou une chute dans l’evier ne posent pas de probleme.'
+          : 'Resiste aux projections d’eau, pas a l’immersion.',
+    }),
+  },
+  {
+    family: 'garantie',
+    match: /garantie (?:limit[ée]e )?(?:de )?(\d{1,2})\s*ans?/,
+    metric: (m) => Number(m[1]),
+    unit: 'ans',
+    build: (m) => ({
+      group: 'usage',
+      label: `Garantie ${m[1]} an${Number(m[1]) > 1 ? 's' : ''}`,
+      effect:
+        'Ce que le fabricant accepte de couvrir. Une garantie longue est aussi un signal sur la duree de vie attendue.',
     }),
   },
 ];
@@ -390,12 +774,21 @@ const normalize = (s: string) =>
  * OLED, 4K avant 1080p), et une seule règle par famille est retenue — annoncer
  * à la fois « 4K » et « 1080p » pour un même écran n'aurait aucun sens.
  */
-export function extractSpecs(title: string, description?: string | null): Spec[] {
+export function extractSpecs(
+  title: string,
+  description?: string | null,
+  categorySlug?: string | null,
+): Spec[] {
   const texte = normalize(`${title} ${description ?? ''}`);
   const specs: Spec[] = [];
   const vus = new Set<string>();
 
   for (const rule of RULES) {
+    // Une regle restreinte reste silencieuse hors de son domaine — y compris
+    // quand la categorie est inconnue : mieux vaut ne rien dire que risquer un
+    // verdict hors sujet.
+    if (rule.onlyIn && !(categorySlug && rule.onlyIn.has(categorySlug))) continue;
+
     const m = texte.match(rule.match);
     if (!m) continue;
 
@@ -403,7 +796,17 @@ export function extractSpecs(title: string, description?: string | null): Spec[]
     // gagne, et les règles sont ordonnées du plus précis au plus général.
     if (vus.has(rule.family)) continue;
     vus.add(rule.family);
-    specs.push(rule.build(m));
+
+    const rang = typeof rule.rank === 'function' ? rule.rank(m) : rule.rank;
+    const valeur = rule.metric?.(m);
+    specs.push({
+      ...rule.build(m),
+      family: rule.family,
+      ...(rang !== undefined ? { rank: rang, scale: rule.scale } : {}),
+      ...(valeur !== undefined && Number.isFinite(valeur)
+        ? { metric: valeur, unit: rule.unit, lowerIsBetter: rule.lowerIsBetter }
+        : {}),
+    });
   }
 
   return specs;

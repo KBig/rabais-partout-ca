@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { DealRow } from '@/lib/db/queries';
 import { money, CONDITION_LABEL } from '@/lib/format';
 import { ScoreBadge } from './ScoreBadge';
+import { DiscountBadge } from './DiscountBadge';
 import { ProductImage } from './ProductImage';
 
 /**
@@ -92,13 +93,9 @@ export function DealCard({ deal, priority = false }: { deal: DealRow; priority?:
               <span className="tnum text-xs text-faint line-through">{money(deal.median)}</span>
             )}
             {realDrop ? (
-              <span className="tnum rounded bg-brand/15 px-1.5 py-0.5 text-[11px] font-bold text-brand">
-                −{Math.round(realDrop * 100)} %
-              </span>
+              <DiscountBadge fraction={realDrop} verified />
             ) : claimed ? (
-              <span className="tnum rounded bg-raised px-1.5 py-0.5 text-[11px] font-medium text-faint">
-                −{Math.round(claimed * 100)} % annoncé
-              </span>
+              <DiscountBadge fraction={claimed} verified={false} />
             ) : null}
           </div>
 

@@ -13,6 +13,12 @@ import assert from 'node:assert/strict';
 import { computeStats, type PricePoint } from '../src/lib/pricing/stats';
 import { scoreProduct, wilsonLowerBound } from '../src/lib/pricing/score';
 import { typeToken, type PeerStats } from '../src/lib/pricing/peers';
+import { extractSpecs } from '../src/lib/specs';
+import {
+  gammeFromDistribution,
+  gammeFromRank,
+  type Distribution,
+} from '../src/lib/quality/components';
 
 const DAY = 86_400_000;
 const NOW = Date.parse('2026-06-01T12:00:00Z');
@@ -335,4 +341,87 @@ test('un vrai rabais reste reconnu malgré le même contrôle', () => {
 
   assert.equal(vrai.fakeDealPenalty, 0, 'un régulier plausible ne doit pas être pénalisé');
   assert.ok(vrai.score > 45, `une vraie affaire doit ressortir (obtenu ${vrai.score.toFixed(1)})`);
+});
+
+// ---------------------------------------------------------------------------
+// Analyse par composante
+// ---------------------------------------------------------------------------
+
+const dist = (d: Partial<Distribution>): Distribution => ({
+  n: 500,
+  p10: 10,
+  p25: 20,
+  p50: 30,
+  p75: 40,
+  p90: 50,
+  ...d,
+});
+
+const specDe = (titre: string, categorie: string | null, famille: string) => {
+  const s = extractSpecs(titre, null, categorie).find((x) => x.family === famille);
+  return s;
+};
+
+test('etre exactement dans la mediane n’est jamais etre en dessous', () => {
+  // Cas reel : chez les portables, p25 et p50 valent tous deux 144 Hz. Une
+  // comparaison « v <= p25 » classait alors un ecran parfaitement median en
+  // entree de gamme.
+  const serree = dist({ p25: 144, p50: 144, p75: 165, p90: 240 });
+  const r = gammeFromDistribution(
+    { label: '144 Hz', effect: '', group: 'image', family: 'rafraichissement', metric: 144 },
+    serree,
+  );
+  assert.equal(r.gamme, 'milieu', 'la mediane doit rester le milieu de gamme');
+});
+
+test('une valeur basse est un atout quand moins vaut mieux', () => {
+  const bruit = dist({ p10: 40, p25: 44, p50: 50, p75: 55, p90: 60 });
+  const base = { label: '', effect: '', group: 'usage' as const, family: 'bruit', lowerIsBetter: true };
+
+  assert.equal(gammeFromDistribution({ ...base, metric: 38 }, bruit).gamme, 'premium');
+  assert.equal(gammeFromDistribution({ ...base, metric: 58 }, bruit).gamme, 'entree');
+  assert.equal(gammeFromDistribution({ ...base, metric: 50 }, bruit).gamme, 'milieu');
+});
+
+test('une echelle a deux echelons ne produit pas de « tres haut de gamme »', () => {
+  // Un SSD est un bon point, pas un sommet : sans ce garde-fou, toute presence
+  // binaire ressortait au meme rang qu’une dalle OLED.
+  const r = gammeFromRank({
+    label: 'Stockage SSD',
+    effect: '',
+    group: 'performance',
+    family: 'stockage-type',
+    rank: 2,
+    scale: 2,
+  });
+  assert.equal(r.gamme, 'haut');
+});
+
+test('un materiau ne se juge que la ou il decrit le produit', () => {
+  const casserole = specDe('Poele en aluminium 12 po', 'cuisine', 'materiau');
+  assert.ok(casserole, 'la matiere doit compter pour un article de cuisine');
+
+  const portable = specDe('Portable 14 po en aluminium d’Apple', 'portables', 'materiau');
+  assert.equal(
+    portable,
+    undefined,
+    'une coque en aluminium ne classe pas un ordinateur en milieu de gamme',
+  );
+
+  const inconnue = specDe('Poele en aluminium 12 po', null, 'materiau');
+  assert.equal(inconnue, undefined, 'sans categorie, on prefere se taire');
+});
+
+test('des pouces ne sont une diagonale que s’il y a un ecran', () => {
+  assert.match(specDe('Televiseur 65 po', 'televiseurs', 'diagonale')!.label, /^Diagonale/);
+  assert.match(specDe('Hotte de 30 po', 'gros-electro', 'diagonale')!.label, /^Format/);
+});
+
+test('un Bluetooth sans version annoncee n’est pas classe', () => {
+  const sansVersion = specDe('Casque Bluetooth sans fil', 'casques', 'bluetooth');
+  assert.ok(sansVersion, 'la caracteristique reste affichee');
+  assert.equal(sansVersion!.rank, undefined, 'ne rien savoir n’est pas etre en bas de gamme');
+
+  const avec = specDe('Casque Bluetooth 5.3 sans fil', 'casques', 'bluetooth');
+  assert.equal(avec!.rank, 3);
 });
