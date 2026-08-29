@@ -70,25 +70,69 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           mkdir -p data
+
           # Première exécution : la release n'existe pas encore, on la crée.
           if ! gh release view db >/dev/null 2>&1; then
-            gh release create db --title "Base de données" \
-              --notes "Base SQLite de collecte. Remplacée à chaque cycle."
+            gh release create db --title "Base de données"               --notes "Base SQLite de collecte. Remplacée à chaque cycle."
           fi
-          # Base absente = premier cycle : le script la créera de zéro.
-          gh release download db --pattern itemfinder.db --dir data --clobber \
-            || echo "Aucune base existante — démarrage à vide."
+
+          # UN ÉCHEC DE TÉLÉCHARGEMENT DOIT ARRÊTER LE CYCLE.
+          #
+          # La version précédente se terminait par « || echo démarrage à vide »,
+          # ce qui avalait TOUTE erreur — réseau, jeton expiré, quota dépassé.
+          # Le cycle repartait alors d'une base neuve, la remplissait de ce
+          # qu'il pouvait en quinze minutes, puis ÉCRASAIT la vraie sur la
+          # release. Un incident passager suffisait à effacer des semaines
+          # d'historique de prix, sans un mot dans le journal.
+          #
+          # Seul le cas « aucune base publiée » est légitime, et il ne se
+          # produit qu'au tout premier cycle : on le distingue explicitement.
+          command -v zstd >/dev/null || sudo apt-get install -y -qq zstd
+
+          publiees=$(gh release view db --json assets --jq '.assets[].name')
+          if echo "$publiees" | grep -qx 'itemfinder.db.zst'; then
+            gh release download db --pattern 'itemfinder.db.zst' --dir data --clobber
+            zstd -d -f data/itemfinder.db.zst -o data/itemfinder.db
+            rm -f data/itemfinder.db.zst
+          elif echo "$publiees" | grep -qx 'itemfinder.db'; then
+            # Ancien format, non compressé : accepté, puis remplacé par la
+            # version compressée dès le premier archivage.
+            gh release download db --pattern 'itemfinder.db' --dir data --clobber
+          else
+            echo "Aucune base publiée — premier cycle, elle sera créée de zéro."
+          fi
+          ls -lh data/ || true
+
+      # L'empreinte d'AVANT sert de témoin : elle seule permet de dire, après
+      # coup, si la base archivée est bien la continuation de la précédente.
+      - name: Relever l'empreinte de départ
+        id: avant
+        run: echo "empreinte=$(npx tsx scripts/garde-base.ts empreinte)" >> "$GITHUB_OUTPUT"
 
       - name: Cycle de collecte
         run: npm run ci:cycle -- --minutes 15
+
+      # Perdre un cycle est réparable ; écraser la release avec une base qui a
+      # fondu ne l'est pas.
+      - name: Vérifier que la base n'a pas fondu
+        run: npx tsx scripts/garde-base.ts verifier '${{ steps.avant.outputs.empreinte }}'
 
       - name: Archiver la base
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ls -lh data/itemfinder.db
-          gh release upload db data/itemfinder.db --clobber
+          set -euo pipefail
+          command -v zstd >/dev/null || sudo apt-get install -y -qq zstd
+
+          # La base est surtout du texte : mesuré sur le fichier réel, 951 Mo
+          # tombent à environ 210 Mo — un facteur 4,5. Autant de temps de
+          # transfert en moins à chaque cycle, et de la marge sous le plafond
+          # de 2 Go des assets de release, que la base atteindrait sinon.
+          zstd -9 -T0 -f data/itemfinder.db -o data/itemfinder.db.zst
+          ls -lh data/itemfinder.db data/itemfinder.db.zst
+          gh release upload db data/itemfinder.db.zst --clobber
 
       - name: Publier le tableau de bord
         run: npm run stores >> "$GITHUB_STEP_SUMMARY"
