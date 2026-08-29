@@ -106,6 +106,24 @@ const CATEGORIES_ECRAN: ReadonlySet<string> = new Set([
   'telephones', 'telephones-forfait', 'pc-gaming', 'realite-virtuelle',
 ]);
 
+/** Gros et petits electromenagers : la ou les fonctions de cuisson et de froid comptent. */
+const CATEGORIES_ELECTRO: ReadonlySet<string> = new Set([
+  'gros-electro', 'petits-electro', 'cuisine', 'aspirateurs',
+]);
+
+/** Outillage et jardin : tension de batterie, type de moteur. */
+const CATEGORIES_OUTILS: ReadonlySet<string> = new Set(['outils', 'jardinage', 'auto', 'pieces-auto']);
+
+/** Soins et beaute : les contenances se comparent, les formats aussi. */
+const CATEGORIES_BEAUTE: ReadonlySet<string> = new Set([
+  'beaute-sante', 'beaute-corps', 'soins-cheveux', 'soins-dentaires', 'bien-etre',
+]);
+
+/** Jeux et jouets : nombre de joueurs, age, duree. */
+const CATEGORIES_JEUX: ReadonlySet<string> = new Set([
+  'jeux-societe', 'jouets', 'jouets-enfants', 'jouets-exterieur', 'lego', 'modelisme', 'bebe',
+]);
+
 /**
  * Categories ou la matiere EST le produit : vaisselle, cuisson, mobilier,
  * rangement. Ailleurs, le materiau cite dans un titre ne decrit qu'un detail
@@ -116,7 +134,7 @@ const CATEGORIES_MATIERE: ReadonlySet<string> = new Set([
   'salon', 'chambre', 'bureau-meubles', 'rangement', 'rangement-bureau',
   'decoration', 'literie', 'luminaires', 'jardinage', 'outils', 'animaux',
   'habitat-animaux', 'accessoires-animaux', 'bebe', 'mobilier-bebe', 'bagages',
-  'sport', 'fitness',
+  'sport', 'fitness', 'montres-mode', 'bijoux', 'accessoires-mode', 'vetements',
 ])
 
 export const RULES: SpecRule[] = [
@@ -297,6 +315,108 @@ export const RULES: SpecRule[] = [
   },
 
   // ------------------------------------------------------------ performance
+  //
+  // La MARQUE du processeur est une famille a part entiere.
+  //
+  // « Core i7 » dit le niveau de gamme, pas le fabricant — et c'est le
+  // fabricant qu'on veut pouvoir filtrer : quelqu'un qui cherche de l'AMD ne
+  // veut pas parcourir les i7 pour trouver les Ryzen.
+  {
+    family: 'cpu-marque',
+    match: /\bryzen\b|\bathlon\b|\bamd\s(?:fx|a\d)\b/,
+    build: () => ({
+      group: 'performance',
+      label: 'Processeur AMD',
+      effect:
+        'AMD offre en general plus de coeurs a prix egal : avantage au travail qui sait les utiliser, montage video ou compilation.',
+    }),
+  },
+  {
+    family: 'cpu-marque',
+    match: /\bcore\s?(?:ultra\s?)?[i3579]|\bintel\b|\bceleron\b|\bpentium\b|\bxeon\b/,
+    build: () => ({
+      group: 'performance',
+      label: 'Processeur Intel',
+      effect:
+        'Intel domine encore les taches qui ne tirent parti que d\u2019un ou deux coeurs, et sa compatibilite logicielle est la plus large.',
+    }),
+  },
+  {
+    family: 'cpu-marque',
+    match: /\bpuce\s?m[1234]\b|\bapple\s?m[1234]\b|\bm[1234]\s?(?:pro|max|ultra)\b/,
+    build: () => ({
+      group: 'performance',
+      label: 'Puce Apple Silicon',
+      effect:
+        'Processeur maison d\u2019Apple : autonomie et silence tres au-dessus de la moyenne, mais reserve a macOS.',
+    }),
+  },
+  {
+    family: 'cpu-marque',
+    match: /\bsnapdragon\b|\bmediatek\b|\bexynos\b/,
+    build: () => ({
+      group: 'performance',
+      label: 'Processeur ARM mobile',
+      effect:
+        'Concu pour la basse consommation. Excellente autonomie ; certains logiciels de bureau ne tournent qu\u2019en emulation.',
+    }),
+  },
+  {
+    family: 'gpu',
+    match: /\bradeon\s?rx\s?(\d{3,4})/,
+    rank: (m) => {
+      const rang = Number(m[1]) % 100;
+      return rang >= 80 ? 4 : rang >= 70 ? 3 : rang >= 60 ? 2 : 1;
+    },
+    scale: 4,
+    build: (m) => ({
+      group: 'performance',
+      label: `Carte graphique Radeon RX ${m[1]}`,
+      effect:
+        'Carte AMD. A puissance comparable, souvent moins chere qu\u2019une NVIDIA, avec un meilleur rapport memoire/prix mais un ray tracing en retrait.',
+    }),
+  },
+  {
+    family: 'gpu',
+    match: /\bintel\s?arc\s?[ab](\d{3})/,
+    rank: 1,
+    scale: 4,
+    build: (m) => ({
+      group: 'performance',
+      label: `Carte graphique Intel Arc ${m[1]}`,
+      effect:
+        'Carte d\u2019entree de gamme d\u2019Intel. Convient au jeu en 1080p et a l\u2019encodage video, moins aux titres exigeants.',
+    }),
+  },
+  {
+    family: 'gpu-marque',
+    match: /\b(?:rtx|gtx|geforce)\b|\bnvidia\b/,
+    build: () => ({
+      group: 'performance',
+      label: 'Graphiques NVIDIA',
+      effect:
+        'Le plus repandu en jeu, et le mieux servi par les logiciels de creation et d\u2019intelligence artificielle.',
+    }),
+  },
+  {
+    family: 'gpu-marque',
+    match: /\bradeon\b/,
+    build: () => ({
+      group: 'performance',
+      label: 'Graphiques AMD Radeon',
+      effect: 'Bon rapport puissance-prix en jeu ; support logiciel plus limite en creation.',
+    }),
+  },
+  {
+    family: 'gpu-marque',
+    match: /graphiques? int[ée]gr[ée]s?|\biris xe\b|\buhd graphics\b/,
+    build: () => ({
+      group: 'performance',
+      label: 'Graphiques integres',
+      effect:
+        'Aucune carte dediee : suffisant pour la bureautique et la video, insuffisant pour le jeu recent ou la 3D.',
+    }),
+  },
   {
     family: 'gpu',
     match: /\b(?:rtx|gtx)\s?(\d{4})/,
@@ -766,6 +886,324 @@ export const RULES: SpecRule[] = [
         'Ce que le fabricant accepte de couvrir. Une garantie longue est aussi un signal sur la duree de vie attendue.',
     }),
   },
+
+  // --------------------------------------------- fonctions d'electromenager
+  //
+  // Un refrigerateur se choisit autant sur ses fonctions que sur son volume :
+  // distributeur, configuration des portes, degivrage. Rien de tout cela
+  // n'apparaissait, alors que les titres le disent explicitement.
+  {
+    family: 'distributeur',
+    onlyIn: CATEGORIES_ELECTRO,
+    match: /distributeur d[’']eau et de (?:glace|gla[çc]ons)|distributeur de gla[çc]ons et d[’']eau/,
+    rank: 2,
+    scale: 2,
+    build: () => ({
+      group: 'usage',
+      label: 'Distributeur d’eau et de glaçons',
+      effect:
+        'Eau filtree et glacons sans ouvrir la porte. Demande un raccordement a l’eau, et occupe de l’espace dans la porte.',
+    }),
+  },
+  {
+    family: 'distributeur',
+    onlyIn: CATEGORIES_ELECTRO,
+    match: /distributeur d[’']eau/,
+    rank: 1,
+    scale: 2,
+    build: () => ({
+      group: 'usage',
+      label: 'Distributeur d’eau',
+      effect:
+        'Eau fraiche sans ouvrir la porte. Demande un raccordement a l’eau ; certains modeles utilisent un reservoir a remplir.',
+    }),
+  },
+  {
+    family: 'glacons',
+    onlyIn: CATEGORIES_ELECTRO,
+    match: /machine [àa] gla[çc]ons|fabrique de gla[çc]ons|fabrique-gla[çc]ons|distributeur de gla[çc]ons/,
+    build: () => ({
+      group: 'usage',
+      label: 'Fabrique de glaçons',
+      effect: 'Produit et stocke les glacons en continu : plus de bacs a remplir ni a attendre.',
+    }),
+  },
+  {
+    family: 'configuration',
+    onlyIn: CATEGORIES_ELECTRO,
+    match: /portes? fran[çc]aises?|french door|[àa] deux portes/,
+    build: () => ({
+      group: 'usage',
+      label: 'Portes françaises',
+      effect:
+        'Deux portes etroites en haut, congelateur en tiroir en bas. Les aliments frais restent a hauteur des yeux et les portes debordent moins dans la piece.',
+    }),
+  },
+  {
+    family: 'configuration',
+    onlyIn: CATEGORIES_ELECTRO,
+    match: /juxtapos[ée]|c[ôo]te [àa] c[ôo]te|side[- ]by[- ]side/,
+    build: () => ({
+      group: 'usage',
+      label: 'Congélateur juxtaposé',
+      effect:
+        'Refrigerateur et congelateur cote a cote, sur toute la hauteur. Pratique pour les surgeles, mais chaque compartiment est etroit.',
+    }),
+  },
+  {
+    family: 'configuration',
+    onlyIn: CATEGORIES_ELECTRO,
+    match: /cong[ée]lateur (?:en bas|inf[ée]rieur)/,
+    build: () => ({
+      group: 'usage',
+      label: 'Congélateur en bas',
+      effect:
+        'Le compartiment le plus utilise est en haut, a hauteur d’homme. Configuration la plus courante et la plus economique.',
+    }),
+  },
+  {
+    family: 'givre',
+    onlyIn: CATEGORIES_ELECTRO,
+    match: /sans (?:givre|d[ée]givrage)|no[- ]frost|d[ée]givrage automatique/,
+    build: () => ({
+      group: 'usage',
+      label: 'Sans givre',
+      effect: 'Plus de degivrage manuel : l’appareil evacue l’humidite tout seul.',
+    }),
+  },
+  {
+    family: 'cuisson',
+    onlyIn: CATEGORIES_ELECTRO,
+    match: /friture [àa] air|air fry|\bairfryer\b/,
+    build: () => ({
+      group: 'usage',
+      label: 'Cuisson à air chaud',
+      effect:
+        'Un ventilateur fait circuler l’air tres chaud : texture proche de la friture avec une fraction du gras.',
+    }),
+  },
+  {
+    family: 'convection',
+    onlyIn: CATEGORIES_ELECTRO,
+    match: /\bconvection\b/,
+    build: () => ({
+      group: 'usage',
+      label: 'Cuisson par convection',
+      effect:
+        'L’air chaud circule : cuisson plus rapide et plus uniforme, et plusieurs plaques a la fois sans intervertir.',
+    }),
+  },
+  {
+    family: 'autonettoyant',
+    onlyIn: CATEGORIES_ELECTRO,
+    match: /autonettoyant|auto[- ]nettoyage|\bpyrolyse\b/,
+    build: () => ({
+      group: 'usage',
+      label: 'Autonettoyant',
+      effect: 'Le four brule les residus a tres haute temperature ; il ne reste que de la cendre a essuyer.',
+    }),
+  },
+  {
+    family: 'plaque',
+    onlyIn: CATEGORIES_ELECTRO,
+    match: /\binduction\b/,
+    rank: 3,
+    scale: 3,
+    build: () => ({
+      group: 'usage',
+      label: 'Plaque à induction',
+      effect:
+        'Chauffe la casserole directement : le plus rapide et le plus precis, la surface reste froide. Exige des ustensiles magnetiques.',
+    }),
+  },
+  {
+    family: 'plaque',
+    onlyIn: CATEGORIES_ELECTRO,
+    match: /au gaz\b|\bgaz naturel\b|\bpropane\b/,
+    rank: 2,
+    scale: 3,
+    build: () => ({
+      group: 'usage',
+      label: 'Cuisson au gaz',
+      effect: 'Reglage instantane et visible de la flamme. Demande un raccordement au gaz.',
+    }),
+  },
+  {
+    family: 'plaque',
+    onlyIn: CATEGORIES_ELECTRO,
+    match: /vitroc[ée]ramique|[ée]l[ée]ments? radiants?/,
+    rank: 1,
+    scale: 3,
+    build: () => ({
+      group: 'usage',
+      label: 'Plaque vitrocéramique',
+      effect: 'Surface lisse, facile a nettoyer. Monte et descend en temperature plus lentement qu’une induction.',
+    }),
+  },
+  {
+    family: 'chargement',
+    onlyIn: CATEGORIES_ELECTRO,
+    match: /chargement frontal|[àa] hublot/,
+    build: () => ({
+      group: 'usage',
+      label: 'Chargement frontal',
+      effect:
+        'Consomme moins d’eau et essore plus fort qu’une laveuse a chargement vertical. Se superpose avec la secheuse.',
+    }),
+  },
+  {
+    family: 'chargement',
+    onlyIn: CATEGORIES_ELECTRO,
+    match: /chargement vertical|chargement par le haut/,
+    build: () => ({
+      group: 'usage',
+      label: 'Chargement vertical',
+      effect:
+        'Cycles plus courts et chargement sans se baisser ; en general moins econome en eau qu’un chargement frontal.',
+    }),
+  },
+  {
+    family: 'connecte',
+    match: /\bwi-?fi int[ée]gr[ée]|application mobile|command[ée]e? par (?:application|t[ée]l[ée]phone)|compatible (?:alexa|google assistant)/,
+    build: () => ({
+      group: 'connectivite',
+      label: 'Pilotable à distance',
+      effect:
+        'Se commande depuis un telephone, et previent en fin de cycle. Utile au quotidien, dependant d’un service en ligne qui peut fermer.',
+    }),
+  },
+
+  // --------------------------------------------------------- jeux et jouets
+  {
+    family: 'joueurs',
+    onlyIn: CATEGORIES_JEUX,
+    match: /(\d)\s*(?:[àa-]|\u2013)\s*(\d{1,2})\s*joueurs/,
+    metric: (m) => Number(m[2]),
+    unit: 'joueurs',
+    build: (m) => ({
+      group: 'usage',
+      label: `${m[1]} à ${m[2]} joueurs`,
+      effect:
+        'Le premier chiffre compte autant que le deuxieme : beaucoup de jeux tombent a plat a deux, meme s’ils l’autorisent.',
+    }),
+  },
+  {
+    family: 'age-min',
+    onlyIn: CATEGORIES_JEUX,
+    match: /[âa]g[ée]s? de (\d{1,2}) ans|(\d{1,2}) ans et plus|\b(\d{1,2})\+\s*ans/,
+    metric: (m) => Number(m[1] ?? m[2] ?? m[3]),
+    unit: 'ans',
+    build: (m) => ({
+      group: 'usage',
+      label: `Dès ${m[1] ?? m[2] ?? m[3]} ans`,
+      effect:
+        'Age recommande par l’editeur. Il tient compte des petites pieces autant que de la difficulte des regles.',
+    }),
+  },
+  {
+    family: 'duree-partie',
+    onlyIn: CATEGORIES_JEUX,
+    match: /(\d{2,3})\s*(?:min|minutes)\b/,
+    metric: (m) => Number(m[1]),
+    unit: 'min',
+    build: (m) => ({
+      group: 'usage',
+      label: `Partie de ${m[1]} min`,
+      effect: 'Duree annoncee d’une partie. Determine si le jeu sort un soir de semaine ou seulement le week-end.',
+    }),
+  },
+
+  // ------------------------------------------------------ soins et contenance
+  {
+    family: 'contenance',
+    onlyIn: CATEGORIES_BEAUTE,
+    match: /\b(\d{2,4})\s*ml\b/,
+    metric: (m) => Number(m[1]),
+    unit: 'ml',
+    build: (m) => ({
+      group: 'usage',
+      label: `Contenance ${m[1]} ml`,
+      effect: 'A rapporter au prix : le format le plus gros n’est pas toujours le moins cher au millilitre.',
+    }),
+  },
+  {
+    family: 'contenance',
+    onlyIn: CATEGORIES_BEAUTE,
+    match: /\b(\d{1,2}[,.]\d)\s*oz\b/,
+    metric: (m) => Number(m[1].replace(',', '.')) * 29.57,
+    unit: 'ml',
+    build: (m) => ({
+      group: 'usage',
+      label: `Contenance ${m[1]} oz`,
+      effect: 'A rapporter au prix : le format le plus gros n’est pas toujours le moins cher a la dose.',
+    }),
+  },
+
+  // ------------------------------------------------------------------ encre
+  {
+    family: 'encre-origine',
+    match: /cartouche.{0,30}(?:d[’']origine|originale?|authentique|\bOEM\b)/i,
+    rank: 2,
+    scale: 2,
+    build: () => ({
+      group: 'usage',
+      label: 'Cartouche d’origine',
+      effect:
+        'Fabriquee par le constructeur de l’imprimante : rendement annonce fiable et aucun risque de blocage logiciel.',
+    }),
+  },
+  {
+    family: 'encre-origine',
+    match: /\bcompatible\b.{0,40}(?:imprimante|epson|canon|hp|brother|lexmark)|\bremanufactur/,
+    rank: 1,
+    scale: 2,
+    build: () => ({
+      group: 'usage',
+      label: 'Cartouche compatible',
+      effect:
+        'Fabriquee par un tiers : bien moins chere, mais rendement variable et certaines imprimantes la refusent apres mise a jour.',
+    }),
+  },
+  {
+    family: 'rendement',
+    match: /(\d{3,5})\s*pages/,
+    metric: (m) => Number(m[1]),
+    unit: 'pages',
+    build: (m) => ({
+      group: 'usage',
+      label: `Rendement ${m[1]} pages`,
+      effect:
+        'Nombre de pages annonce, mesure a 5 % de couverture. C’est le seul chiffre qui permette de comparer un prix a l’usage.',
+    }),
+  },
+
+  // ----------------------------------------------------------------- outils
+  {
+    family: 'moteur',
+    onlyIn: CATEGORIES_OUTILS,
+    match: /sans balais|\bbrushless\b/,
+    rank: 2,
+    scale: 2,
+    build: () => ({
+      group: 'performance',
+      label: 'Moteur sans balais',
+      effect:
+        'Pas de pieces d’usure frottantes : plus de couple, moins de chaleur, et une autonomie sensiblement meilleure sur batterie.',
+    }),
+  },
+  {
+    family: 'tension',
+    onlyIn: CATEGORIES_OUTILS,
+    match: /\b(\d{2})\s*v\b(?!\w)/,
+    metric: (m) => Number(m[1]),
+    unit: 'V',
+    build: (m) => ({
+      group: 'performance',
+      label: `Batterie ${m[1]} V`,
+      effect:
+        'La tension donne la puissance disponible. Elle engage aussi : les batteries d’une gamme ne vont que sur les outils de la meme gamme.',
+    }),
+  },
 ];
 
 export const normalizeSpecText = (s: string) =>
@@ -817,6 +1255,89 @@ export function extractSpecs(
 
   return specs;
 }
+
+/**
+ * Nom lisible de chaque famille, et ORDRE d'affichage dans les filtres.
+ *
+ * L'ordre n'est pas alphabetique : il suit ce qui decide un achat. Personne ne
+ * choisit un ordinateur par son indice d'etancheite, mais beaucoup le
+ * choisissent par son processeur. Les criteres decisifs passent devant.
+ */
+export const FAMILY_LABEL: Record<string, string> = {
+  'cpu-marque': 'Marque du processeur',
+  cpu: 'Gamme du processeur',
+  ram: 'Mémoire vive',
+  'stockage-taille': 'Stockage',
+  'stockage-type': 'Type de stockage',
+  'gpu-marque': 'Type de graphiques',
+  gpu: 'Carte graphique',
+
+  resolution: 'Résolution',
+  dalle: 'Type de dalle',
+  rafraichissement: 'Rafraîchissement',
+  diagonale: 'Taille de l’écran',
+  reponse: 'Temps de réponse',
+  hdr: 'HDR',
+  courbure: 'Courbure',
+
+  capacite: 'Capacité',
+  puissance: 'Puissance',
+  aspiration: 'Aspiration',
+  bruit: 'Niveau sonore',
+  'debit-air': 'Débit d’air',
+  btu: 'BTU',
+  essorage: 'Essorage',
+  couverts: 'Couverts',
+  materiau: 'Matériau',
+  revetement: 'Revêtement',
+  filtration: 'Filtration',
+  navigation: 'Navigation',
+  vidange: 'Vidange',
+  energie: 'Consommation',
+  garantie: 'Garantie',
+  etancheite: 'Étanchéité',
+  autonomie: 'Autonomie',
+
+  distributeur: 'Distributeur',
+  glacons: 'Glaçons',
+  configuration: 'Configuration',
+  givre: 'Dégivrage',
+  cuisson: 'Cuisson à air',
+  convection: 'Convection',
+  autonettoyant: 'Autonettoyant',
+  plaque: 'Type de cuisson',
+  chargement: 'Chargement',
+  connecte: 'Pilotable à distance',
+  joueurs: 'Nombre de joueurs',
+  'age-min': 'Âge minimum',
+  'duree-partie': 'Durée de partie',
+  contenance: 'Contenance',
+  'encre-origine': 'Origine de la cartouche',
+  rendement: 'Rendement',
+  moteur: 'Type de moteur',
+  tension: 'Tension de batterie',
+
+  'reduction-bruit': 'Réduction de bruit',
+  'audio-spatial': 'Son spatial',
+  wifi: 'Wi-Fi',
+  bluetooth: 'Bluetooth',
+  hdmi: 'HDMI',
+  sync: 'Synchronisation',
+};
+
+export const FAMILY_ORDER: readonly string[] = [
+  'cpu-marque', 'cpu', 'ram', 'stockage-taille', 'stockage-type',
+  'gpu-marque', 'gpu',
+  'resolution', 'dalle', 'diagonale', 'rafraichissement', 'reponse', 'hdr', 'courbure',
+  'capacite', 'configuration', 'distributeur', 'glacons', 'givre', 'plaque',
+  'cuisson', 'convection', 'autonettoyant', 'chargement', 'connecte',
+  'puissance', 'aspiration', 'bruit', 'debit-air', 'btu', 'essorage', 'moteur',
+  'tension', 'joueurs', 'age-min', 'duree-partie', 'contenance',
+  'encre-origine', 'rendement',
+  'couverts', 'materiau', 'revetement', 'filtration', 'navigation', 'vidange',
+  'autonomie', 'garantie', 'energie', 'etancheite',
+  'reduction-bruit', 'audio-spatial', 'wifi', 'bluetooth', 'hdmi', 'sync',
+];
 
 export const SPEC_GROUP_LABEL: Record<Spec['group'], string> = {
   image: 'Image',

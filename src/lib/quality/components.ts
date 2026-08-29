@@ -204,7 +204,22 @@ export interface DistributionStats {
   produits: number;
   cles: number;
   retenues: number;
+  caracteristiques: number;
 }
+
+/**
+ * Valeur de filtre : stable, sans accent ni espace.
+ *
+ * L'etiquette affichee peut changer de formulation sans casser les liens de
+ * filtre deja partages, tant que la valeur reste la meme.
+ */
+const filterValue = (label: string) =>
+  label
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
 
 /**
  * Recalcule la distribution de chaque caractéristique numérique.
@@ -216,24 +231,66 @@ export function buildSpecDistribution(log: (m: string) => void = () => {}): Dist
   const conn = db();
 
   const produits = conn
-    .prepare<[], { title: string; description: string | null; category_slug: string | null }>(
-      `SELECT title, description, category_slug FROM products
+    .prepare<[], {
+      id: number;
+      title: string;
+      description: string | null;
+      category_slug: string | null;
+    }>(
+      `SELECT id, title, description, category_slug FROM products
         WHERE is_active = 1 AND category_slug IS NOT NULL`,
     )
     .all();
 
   log(`  ${produits.length} produits à analyser…`);
 
+  const insertSpec = conn.prepare<[number, string, string, string, number | null]>(
+    `INSERT INTO product_specs (product_id, family, label, value, metric)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(product_id, family) DO UPDATE SET
+       label = excluded.label, value = excluded.value, metric = excluded.metric`,
+  );
+
   const valeurs = new Map<string, number[]>();
-  for (const p of produits) {
-    for (const spec of extractSpecs(p.title, p.description, p.category_slug)) {
-      if (spec.metric === undefined) continue;
-      const cle = `${p.category_slug}::${metricKey(spec)}`;
-      const liste = valeurs.get(cle);
-      if (liste) liste.push(spec.metric);
-      else valeurs.set(cle, [spec.metric]);
+  let caracteristiques = 0;
+
+  // Une seule passe d'extraction sert les deux usages : la distribution
+  // statistique et l'index de filtrage. Extraire deux fois finirait par
+  // produire deux verites differentes.
+  //
+  // L'ecriture est DECOUPEE. SQLite n'accepte qu'un ecrivain a la fois : une
+  // transaction unique sur pres de deux millions de lignes tiendrait le verrou
+  // assez longtemps pour faire echouer une collecte lancee en parallele. Des
+  // lots courts laissent les deux travaux avancer ensemble.
+  conn.prepare('DELETE FROM product_specs').run();
+
+  const TAILLE_LOT = 20_000;
+  const ecrireLot = conn.transaction((lot: typeof produits) => {
+    for (const p of lot) {
+      for (const spec of extractSpecs(p.title, p.description, p.category_slug)) {
+        insertSpec.run(
+          p.id,
+          spec.family,
+          spec.label,
+          filterValue(spec.label),
+          spec.metric ?? null,
+        );
+        caracteristiques++;
+
+        if (spec.metric === undefined) continue;
+        const cle = `${p.category_slug}::${metricKey(spec)}`;
+        const liste = valeurs.get(cle);
+        if (liste) liste.push(spec.metric);
+        else valeurs.set(cle, [spec.metric]);
+      }
     }
+  });
+
+  for (let i = 0; i < produits.length; i += TAILLE_LOT) {
+    ecrireLot(produits.slice(i, i + TAILLE_LOT));
   }
+
+  log(`  ${caracteristiques} caractéristiques indexées.`);
 
   const insert = conn.prepare(
     `INSERT INTO spec_distribution
@@ -271,5 +328,5 @@ export function buildSpecDistribution(log: (m: string) => void = () => {}): Dist
   invalidateDistributionCache();
   log(`  ${valeurs.size} combinaisons vues, ${retenues} retenues (seuil ${MIN_SAMPLE}).`);
 
-  return { produits: produits.length, cles: valeurs.size, retenues };
+  return { produits: produits.length, cles: valeurs.size, retenues, caracteristiques };
 }

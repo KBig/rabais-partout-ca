@@ -1,4 +1,5 @@
 import { db } from './index';
+import { FAMILY_LABEL, FAMILY_ORDER } from '../specs';
 
 /**
  * Couche d'accès aux données du site.
@@ -22,6 +23,8 @@ export interface DealRow {
   storeColor: string | null;
   categorySlug: string | null;
   condition: string;
+  /** Baisse mesuree par nous : dans le temps, ou face aux equivalents. */
+  verifiedDrop: number;
   availability: string;
   marketplace: number;
   sellerName: string | null;
@@ -65,6 +68,7 @@ const SELECT_DEAL = `
          p.rating, p.rating_count AS ratingCount,
          s.score, s.confidence, s.drop_vs_median AS dropVsMedian,
          s.is_lowest_ever AS isLowestEver, s.median_90d AS median,
+         s.verified_drop AS verifiedDrop,
          s.min_ever AS minEver, s.max_ever AS maxEver,
          s.days_of_history AS daysOfHistory, s.reasons,
          e.recommend_yes AS recommendYes, e.recommend_total AS recommendTotal,
@@ -127,6 +131,21 @@ export interface DealFilters {
   limit?: number;
   offset?: number;
   sort?: 'score' | 'drop' | 'price-asc' | 'price-desc';
+
+  /** Borne basse de prix. La borne haute existe deja sous `maxPrice`. */
+  minPrice?: number;
+  /** Marques retenues, en minuscules. */
+  brands?: string[];
+  /** Vendeurs tiers retenus. */
+  sellers?: string[];
+  /**
+   * Caracteristiques retenues, par famille : { cpu: ['processeur-core-i7'] }.
+   *
+   * Plusieurs valeurs dans une meme famille sont un OU (« i5 ou i7 ») ;
+   * plusieurs familles sont un ET (« un i7 ET 32 Go »). C'est le comportement
+   * attendu d'un panneau de filtres, et le seul qui ne se contredise pas.
+   */
+  specs?: Record<string, string[]>;
 }
 
 
@@ -139,7 +158,21 @@ export interface DealFilters {
  * joindre 163 000 lignes puis à tout trier en mémoire
  * (« USE TEMP B-TREE FOR ORDER BY »), soit 220-330 ms par requête.
  */
-export function topDeals(f: DealFilters = {}): DealRow[] {
+/**
+ * Conditions communes a la LISTE et a son COMPTEUR.
+ *
+ * Les deux les construisaient chacune de leur cote, et elles avaient diverge :
+ * le compteur ignorait quatre filtres. La pagination annoncait alors un nombre
+ * de resultats different de ce qu'elle affichait — un ecart invisible tant
+ * qu'on ne compte pas soi-meme.
+ *
+ * `avecJointure` indique si la requete appelante joint `products` : le filtre
+ * de disponibilite en depend, le compteur n'interrogeant que `deal_scores`.
+ */
+function dealClauses(
+  f: DealFilters,
+  avecJointure: boolean,
+): { where: string[]; params: Record<string, unknown>; besoinProduits: boolean } {
   const where: string[] = ['s.is_active = 1'];
   const params: Record<string, unknown> = {};
 
@@ -156,7 +189,7 @@ export function topDeals(f: DealFilters = {}): DealRow[] {
   }
   if (f.condition === 'used') where.push("s.condition != 'new'");
   else if (f.condition !== 'all') where.push("s.condition = 'new'");
-  if (f.inStockOnly) where.push('(p.in_stock IS NULL OR p.in_stock = 1)');
+  if (f.inStockOnly && avecJointure) where.push('(p.in_stock IS NULL OR p.in_stock = 1)');
   if (f.lowestEverOnly) where.push('s.is_lowest_ever = 1');
   if (f.minScore !== undefined) {
     where.push('s.score >= @minScore');
@@ -171,14 +204,75 @@ export function topDeals(f: DealFilters = {}): DealRow[] {
     params.maxPrice = f.maxPrice;
   }
 
-  const order =
-    f.sort === 'drop'
-      ? 's.drop_vs_median DESC, s.score DESC'
-      : f.sort === 'price-asc'
-        ? 's.price ASC'
-        : f.sort === 'price-desc'
-          ? 's.price DESC'
-          : 's.score DESC, s.confidence DESC';
+  // « Plus forte baisse » ne trie que ce qui EST une baisse.
+  //
+  // Sans ce seuil, la liste continuait avec des ecarts de quelques dixiemes de
+  // pourcent — un dollar sur mille cinq cents — presentes comme des rabais. Un
+  // produit sans baisse mesurable n'a rien a faire dans ce classement, meme en
+  // vingtieme page.
+  if (f.sort === 'drop') where.push('s.verified_drop >= 0.05');
+
+  if (f.minPrice !== undefined) {
+    where.push('s.price >= @minPrice');
+    params.minPrice = f.minPrice;
+  }
+
+  // Marque et vendeur vivent sur `products` : la requete appelante doit alors
+  // joindre cette table. On le signale plutot que de le supposer.
+  let besoinProduits = false;
+
+  if (f.brands?.length) {
+    besoinProduits = true;
+    const noms = f.brands.map((b, i) => {
+      params[`brand${i}`] = b.toLowerCase();
+      return `@brand${i}`;
+    });
+    where.push(`LOWER(p.brand) IN (${noms.join(', ')})`);
+  }
+
+  if (f.sellers?.length) {
+    besoinProduits = true;
+    const noms = f.sellers.map((v, i) => {
+      params[`seller${i}`] = v;
+      return `@seller${i}`;
+    });
+    where.push(`p.seller_name IN (${noms.join(', ')})`);
+  }
+
+  // Une sous-requete par famille : leur intersection realise le ET entre
+  // familles, l'IN realisant le OU a l'interieur de chacune.
+  let famille = 0;
+  for (const [nom, valeurs] of Object.entries(f.specs ?? {})) {
+    if (!valeurs.length) continue;
+    const cleFamille = `spf${famille}`;
+    params[cleFamille] = nom;
+    const cles = valeurs.map((v, i) => {
+      params[`spv${famille}_${i}`] = v;
+      return `@spv${famille}_${i}`;
+    });
+    where.push(
+      `s.product_id IN (SELECT product_id FROM product_specs
+                         WHERE family = @${cleFamille} AND value IN (${cles.join(', ')}))`,
+    );
+    famille++;
+  }
+
+  return { where, params, besoinProduits };
+}
+
+/** Ordre SQL correspondant au tri demande. */
+function dealOrder(sort: DealFilters['sort']): string {
+  return sort === 'drop'
+    ? 's.verified_drop DESC, s.score DESC'
+    : sort === 'price-asc'
+      ? 's.price ASC'
+      : sort === 'price-desc'
+        ? 's.price DESC'
+        : 's.score DESC, s.confidence DESC';
+}
+
+export function topDeals(f: DealFilters = {}): DealRow[] {
+  const { where, params } = dealClauses(f, true);
 
   params.limit = f.limit ?? 48;
   params.offset = f.offset ?? 0;
@@ -186,35 +280,21 @@ export function topDeals(f: DealFilters = {}): DealRow[] {
   return db()
     .prepare(
       `${SELECT_DEAL} WHERE ${where.join(' AND ')}
-       ORDER BY ${order} LIMIT @limit OFFSET @offset`,
+       ORDER BY ${dealOrder(f.sort)} LIMIT @limit OFFSET @offset`,
     )
     .all(params)
     .map(hydrate);
 }
 
 export function countDeals(f: DealFilters = {}): number {
-  const where: string[] = ['s.is_active = 1'];
-  const params: Record<string, unknown> = {};
-  if (f.category) {
-    where.push(`(s.category_slug = @category
-                 OR s.category_slug IN (SELECT slug FROM categories WHERE parent_slug = @category))`);
-    params.category = f.category;
-  }
-  if (f.store) {
-    where.push('s.store_id = @store');
-    params.store = f.store;
-  }
-  if (f.condition === 'used') where.push("s.condition != 'new'");
-  else if (f.condition !== 'all') where.push("s.condition = 'new'");
-  if (f.minScore !== undefined) {
-    where.push('s.score >= @minScore');
-    params.minScore = f.minScore;
-  }
+  // Sans filtre sur la marque ou le vendeur, aucune jointure n'est necessaire :
+  // tout est dans deal_scores, et l'index suffit.
+  const { where, params, besoinProduits } = dealClauses(f, false);
+  const jointure = besoinProduits ? 'JOIN products p ON p.id = s.product_id' : '';
 
-  // Aucune jointure : tout est dans deal_scores, donc l'index suffit.
   return (
     db()
-      .prepare(`SELECT COUNT(*) n FROM deal_scores s WHERE ${where.join(' AND ')}`)
+      .prepare(`SELECT COUNT(*) n FROM deal_scores s ${jointure} WHERE ${where.join(' AND ')}`)
       .get(params) as { n: number }
   ).n;
 }
@@ -258,7 +338,7 @@ export function search(
       : f.sort === 'price-desc'
         ? 's.price DESC'
         : f.sort === 'drop'
-          ? 's.drop_vs_median DESC'
+          ? 's.verified_drop DESC'
           : // Par défaut : pertinence d'abord (bm25 est négatif, plus bas = mieux),
             // puis qualité de l'affaire.
             'bm25(products_fts) * 1.0 + (100 - s.score) * 0.06 ASC';
@@ -520,6 +600,190 @@ function facets() {
 
   facetCache = { expires: Date.now() + CACHE_TTL_MS, brands, categories };
   return facetCache;
+}
+
+export interface FacetValue {
+  label: string;
+  value: string;
+  count: number;
+  metric: number | null;
+}
+
+export interface SpecFacet {
+  family: string;
+  label: string;
+  values: FacetValue[];
+}
+
+export interface CategoryFacets {
+  priceMin: number;
+  priceMax: number;
+  brands: FacetValue[];
+  sellers: FacetValue[];
+  specs: SpecFacet[];
+}
+
+/**
+ * Choix de filtres REELLEMENT disponibles dans une categorie.
+ *
+ * Les facettes sont calculees sur le contenu, jamais ecrites a la main : un
+ * rayon d'ordinateurs propose le processeur et la memoire, un rayon de
+ * refrigerateurs propose la capacite et le niveau sonore. Aucune liste figee ne
+ * resterait juste, et proposer un filtre qui ne renvoie rien est pire que de
+ * ne pas le proposer.
+ *
+ * Une valeur qui ne concerne qu'un ou deux produits est ecartee : elle
+ * encombre le panneau sans jamais servir a trier.
+ */
+const MIN_FACET_COUNT = 3;
+
+/** Au-dela, un panneau devient une liste a parcourir plutot qu'un filtre. */
+const MAX_FACET_VALUES = 12;
+
+let categoryFacetCache = new Map<string, { expires: number; data: CategoryFacets }>();
+
+export function invalidateFacetCache() {
+  categoryFacetCache = new Map();
+}
+
+/**
+ * Facettes disponibles, en tenant compte des filtres DEJA poses.
+ *
+ * Le piege classique du filtrage a facettes : une fois « Core i7 » coche, si on
+ * recompte tout avec ce filtre applique, les autres processeurs tombent a zero
+ * et disparaissent. L'utilisateur ne peut plus changer d'avis sans tout
+ * effacer.
+ *
+ * La regle correcte est connue : pour compter les valeurs d'un critere, on
+ * applique tous les filtres SAUF celui-la. Un critere non filtre n'a pas besoin
+ * de ce traitement, d'ou une requete de base plus une par critere filtre —
+ * rarement plus de trois en pratique.
+ */
+export function categoryFacets(f: DealFilters = {}): CategoryFacets {
+  const filtresActifs =
+    Object.values(f.specs ?? {}).some((v) => v.length) ||
+    Boolean(f.brands?.length || f.sellers?.length || f.minPrice || f.maxPrice);
+
+  const cle = `${f.category ?? '*'}|${f.condition ?? 'new'}`;
+  if (!filtresActifs) {
+    const enCache = categoryFacetCache.get(cle);
+    if (enCache && enCache.expires > Date.now()) return enCache.data;
+  }
+
+  const conn = db();
+
+  /** Requete de facettes de caracteristiques, sous un jeu de filtres donne. */
+  const compter = (filtres: DealFilters) => {
+    const { where, params } = dealClauses(filtres, true);
+    return conn
+      .prepare<
+        Record<string, unknown>,
+        { family: string; label: string; value: string; metric: number | null; count: number }
+      >(
+        `SELECT ps.family, ps.label, ps.value, ps.metric, COUNT(*) AS count
+           FROM product_specs ps
+           JOIN deal_scores s ON s.product_id = ps.product_id
+           JOIN products p ON p.id = s.product_id
+          WHERE ${where.join(' AND ')}
+          GROUP BY ps.family, ps.value
+         HAVING count >= ${MIN_FACET_COUNT}
+          ORDER BY count DESC`,
+      )
+      .all(params);
+  };
+
+  const parFamille = new Map<string, FacetValue[]>();
+  const ajouter = (
+    lignes: Array<{ family: string; label: string; value: string; metric: number | null; count: number }>,
+    seulement?: string,
+  ) => {
+    for (const r of lignes) {
+      if (seulement && r.family !== seulement) continue;
+      const liste = parFamille.get(r.family) ?? [];
+      if (liste.length < MAX_FACET_VALUES) {
+        liste.push({ label: r.label, value: r.value, count: r.count, metric: r.metric });
+      }
+      parFamille.set(r.family, liste);
+    }
+  };
+
+  ajouter(compter(f));
+
+  // Pour chaque critere filtre, on recompte SANS lui : sinon ses autres valeurs
+  // auraient disparu et le choix serait irreversible.
+  for (const [famille, valeurs] of Object.entries(f.specs ?? {})) {
+    if (!valeurs.length) continue;
+    const sansCeCritere = { ...f.specs };
+    delete sansCeCritere[famille];
+    parFamille.delete(famille);
+    ajouter(compter({ ...f, specs: sansCeCritere }), famille);
+  }
+
+  const specs: SpecFacet[] = [];
+  for (const family of FAMILY_ORDER) {
+    const valeurs = parFamille.get(family);
+    // Une seule valeur possible ne filtre rien : tous les produits la portent.
+    if (!valeurs || valeurs.length < 2) continue;
+
+    // Les valeurs chiffrees se lisent dans l'ordre des nombres (8, 16, 32) ;
+    // les autres par frequence, le choix courant d'abord.
+    const triees = valeurs.every((v) => v.metric !== null)
+      ? [...valeurs].sort((a, b) => (a.metric ?? 0) - (b.metric ?? 0))
+      : valeurs;
+
+    specs.push({ family, label: FAMILY_LABEL[family] ?? family, values: triees });
+  }
+
+  // Marque et vendeur suivent la meme regle : comptes sans leur propre filtre.
+  const clausesMarque = dealClauses({ ...f, brands: undefined }, true);
+  const brands = conn
+    .prepare<Record<string, unknown>, { label: string; value: string; count: number }>(
+      `SELECT p.brand AS label, LOWER(p.brand) AS value, COUNT(*) AS count
+         FROM deal_scores s JOIN products p ON p.id = s.product_id
+        WHERE ${clausesMarque.where.join(' AND ')} AND p.brand IS NOT NULL AND p.brand <> ''
+        GROUP BY LOWER(p.brand)
+       HAVING count >= ${MIN_FACET_COUNT}
+        ORDER BY count DESC LIMIT ${MAX_FACET_VALUES * 2}`,
+    )
+    .all(clausesMarque.params)
+    .map((r) => ({ ...r, metric: null }));
+
+  const clausesVendeur = dealClauses({ ...f, sellers: undefined }, true);
+  const sellers = conn
+    .prepare<Record<string, unknown>, { label: string; value: string; count: number }>(
+      `SELECT p.seller_name AS label, p.seller_name AS value, COUNT(*) AS count
+         FROM deal_scores s JOIN products p ON p.id = s.product_id
+        WHERE ${clausesVendeur.where.join(' AND ')} AND p.seller_name IS NOT NULL
+        GROUP BY p.seller_name
+       HAVING count >= ${MIN_FACET_COUNT}
+        ORDER BY count DESC LIMIT ${MAX_FACET_VALUES}`,
+    )
+    .all(clausesVendeur.params)
+    .map((r) => ({ ...r, metric: null }));
+
+  // Les bornes de prix ignorent le filtre de prix : elles decrivent le rayon,
+  // pas la selection en cours. Sinon le curseur se retrecirait a chaque essai.
+  const clausesPrix = dealClauses({ ...f, minPrice: undefined, maxPrice: undefined }, true);
+  const bornes = conn
+    .prepare<Record<string, unknown>, { mini: number | null; maxi: number | null }>(
+      `SELECT MIN(s.price) mini, MAX(s.price) maxi
+         FROM deal_scores s JOIN products p ON p.id = s.product_id
+        WHERE ${clausesPrix.where.join(' AND ')}`,
+    )
+    .get(clausesPrix.params);
+
+  const data: CategoryFacets = {
+    priceMin: Math.floor(bornes?.mini ?? 0),
+    priceMax: Math.ceil(bornes?.maxi ?? 0),
+    brands,
+    sellers,
+    specs,
+  };
+
+  if (!filtresActifs) {
+    categoryFacetCache.set(cle, { expires: Date.now() + CACHE_TTL_MS, data });
+  }
+  return data;
 }
 
 export function suggest(raw: string, limit = 4): Suggestion[] {

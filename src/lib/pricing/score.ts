@@ -130,6 +130,14 @@ export interface ScoreResult {
   score: number;
   confidence: number;
   dropVsMedian: number;
+  /**
+   * La baisse que NOUS pouvons defendre, tous moyens confondus.
+   *
+   * Le maximum entre la baisse mesuree dans le temps et celle mesuree face aux
+   * produits equivalents. Jamais le rabais annonce par le marchand : c'est une
+   * promesse invérifiable, et trier dessus recompenserait l'exageration.
+   */
+  verifiedDrop: number;
   pricePercentile: number;
   isLowestEver: boolean;
   daysOfHistory: number;
@@ -308,6 +316,20 @@ export function scoreProduct(input: ScoreInput): ScoreResult | null {
     confPeer =
       clamp(Math.log10(peer.size) / Math.log10(PEERS_FOR_FULL_CONFIDENCE)) * peer.cohesion;
   }
+
+  // La baisse DEFENDABLE, celle sur laquelle on accepte de trier.
+  //
+  // Deux facons de l'etablir, et on garde la plus forte :
+  //   - dans le TEMPS, si notre historique le permet ;
+  //   - dans l'ESPACE, face aux produits equivalents, disponible jour 1.
+  //
+  // Le rabais d'etat attendu est retranche : une boite ouverte a -15 % n'est
+  // pas une affaire, c'est le tarif normal d'une boite ouverte.
+  const baissePairs =
+    peer && peer.size >= 8 && peer.cohesion > 0.35 && !peer.isOutlier
+      ? peer.belowMedian - (CONDITION_EXPECTED_DISCOUNT[input.condition] ?? 0)
+      : 0;
+  const verifiedDrop = clamp(Math.max(dropVsMedian, baissePairs), 0, 1);
 
   // --- 2ter. Signal de REFERENCE externe -----------------------------------
   // Fourchette trouvee sur le web et citee. Rare : la plupart des produits de
@@ -536,6 +558,7 @@ export function scoreProduct(input: ScoreInput): ScoreResult | null {
     minEver: stats.minEver,
     maxEver: stats.maxEver,
     peerPercentile: peer?.percentile ?? null,
+    verifiedDrop,
     peerBelowMedian: peer?.belowMedian ?? null,
     peerSize: peer?.size ?? null,
     peerMedian: peer?.median ?? null,
@@ -672,13 +695,13 @@ export function scoreAll(now = Date.now()): number {
 
   const upsert = conn.prepare(`
     INSERT INTO deal_scores (
-      product_id, score, confidence, drop_vs_median, price_percentile,
+      product_id, score, confidence, drop_vs_median, verified_drop, price_percentile,
       is_lowest_ever, days_of_history, quality_score, claimed_discount,
       fake_deal_penalty, median_90d, min_ever, max_ever, reasons, computed_at,
       peer_percentile, peer_below_median, peer_size, peer_median,
       is_active, condition, category_slug, store_id, price, peer_key
     ) VALUES (
-      @id, @score, @confidence, @drop, @percentile,
+      @id, @score, @confidence, @drop, @verifiedDrop, @percentile,
       @lowest, @days, @quality, @claimed,
       @penalty, @median, @minEver, @maxEver, @reasons, @ts,
       @peerPercentile, @peerBelowMedian, @peerSize, @peerMedian,
@@ -687,6 +710,7 @@ export function scoreAll(now = Date.now()): number {
     ON CONFLICT(product_id) DO UPDATE SET
       score = excluded.score, confidence = excluded.confidence,
       drop_vs_median = excluded.drop_vs_median,
+      verified_drop = excluded.verified_drop,
       price_percentile = excluded.price_percentile,
       is_lowest_ever = excluded.is_lowest_ever,
       days_of_history = excluded.days_of_history,
@@ -764,6 +788,7 @@ export function scoreAll(now = Date.now()): number {
         score: res.score,
         confidence: res.confidence,
         drop: res.dropVsMedian,
+        verifiedDrop: res.verifiedDrop,
         percentile: res.pricePercentile,
         lowest: res.isLowestEver ? 1 : 0,
         days: res.daysOfHistory,

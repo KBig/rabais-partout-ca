@@ -14,8 +14,11 @@ import { ProductImage } from './ProductImage';
  * sa valeur.
  */
 export function DealCard({ deal, priority = false }: { deal: DealRow; priority?: boolean }) {
-  const drop = deal.dropVsMedian ?? 0;
-  const realDrop = drop >= 0.03 ? drop : null;
+  // La baisse verifiee couvre les deux mesures : dans le temps quand nous avons
+  // de l'historique, face aux produits equivalents sinon. Se limiter a la
+  // premiere revenait a n'afficher un rabais plein que sur 872 produits sur
+  // 282 065, et a montrer partout ailleurs la promesse du marchand.
+  const realDrop = (deal.verifiedDrop ?? 0) >= 0.05 ? deal.verifiedDrop : null;
   const claimed =
     deal.listPrice && deal.listPrice > deal.price
       ? (deal.listPrice - deal.price) / deal.listPrice

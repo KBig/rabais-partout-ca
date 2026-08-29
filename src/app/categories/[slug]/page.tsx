@@ -1,9 +1,16 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { topDeals, countDeals, categoriesWithCounts, type DealFilters } from '@/lib/db/queries';
+import {
+  topDeals,
+  countDeals,
+  categoriesWithCounts,
+  categoryFacets,
+  type DealFilters,
+} from '@/lib/db/queries';
 import { CATEGORY_BY_SLUG, childrenOf } from '@/lib/categories';
 import { DealGrid, EmptyState } from '@/components/DealCard';
 import { FilterGroup, SORT_OPTIONS, CONDITION_OPTIONS } from '@/components/FilterBar';
+import { FacetPanel, filtersFromParams } from '@/components/FacetPanel';
 import { num } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
@@ -27,17 +34,24 @@ export default async function CategoryPage({
   const condition = (sp.condition ?? 'new') as 'new' | 'all' | 'used';
   const page = Math.max(1, Number(sp.page ?? 1) || 1);
 
+  const choisis = filtersFromParams(sp);
+
   const filters: DealFilters = {
     category: slug,
     sort,
     condition,
+    ...choisis,
     limit: PAGE_SIZE,
     offset: (page - 1) * PAGE_SIZE,
   };
 
   const deals = topDeals(filters);
-  const total = countDeals({ category: slug, condition });
+  // Le compteur applique EXACTEMENT les memes filtres que la liste, sans quoi
+  // la pagination annonce des pages qui n'existent pas.
+  const total = countDeals(filters);
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const facets = categoryFacets({ category: slug, condition, ...choisis });
 
   const counts = categoriesWithCounts();
   const siblings = childrenOf(slug)
@@ -108,17 +122,23 @@ export default async function CategoryPage({
         />
       </div>
 
-      {deals.length > 0 ? (
-        <>
-          <DealGrid deals={deals} />
-          <Pagination page={page} pages={pages} basePath={basePath} searchParams={sp} />
-        </>
-      ) : (
-        <EmptyState
-          title="Aucun produit dans cette catégorie."
-          hint={`Lancez : npm run crawl -- --store bestbuy-ca --category ${slug}`}
-        />
-      )}
+      <div className="grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)]">
+        <FacetPanel facets={facets} basePath={basePath} searchParams={sp} />
+
+        <div className="min-w-0 space-y-6">
+          {deals.length > 0 ? (
+            <>
+              <DealGrid deals={deals} />
+              <Pagination page={page} pages={pages} basePath={basePath} searchParams={sp} />
+            </>
+          ) : (
+            <EmptyState
+              title="Aucun produit ne correspond à ces filtres."
+              hint="Retirez un critère pour élargir la sélection."
+            />
+          )}
+        </div>
+      </div>
     </div>
   );
 }
