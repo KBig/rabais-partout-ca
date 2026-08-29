@@ -14,6 +14,7 @@ import { computeStats, type PricePoint } from '../src/lib/pricing/stats';
 import { scoreProduct, wilsonLowerBound } from '../src/lib/pricing/score';
 import { typeToken, type PeerStats } from '../src/lib/pricing/peers';
 import { extractSpecs } from '../src/lib/specs';
+import { prixCanadien } from '../src/lib/scraping/stores/canadiantire';
 import {
   gammeFromDistribution,
   gammeFromRank,
@@ -470,4 +471,30 @@ test('un bon produit n’est pas puni pour le mensonge du marchand', () => {
     r.score < 45,
     `sans vraie baisse, ca ne doit pas non plus ressortir comme une affaire (obtenu ${r.score.toFixed(1)})`,
   );
+});
+
+test('un prix se lit dans les deux langues', () => {
+  // Trois pieges reels, rencontres dans cet ordre chez Canadian Tire.
+  //
+  // La page anglaise ecrit « $37.99 », la francaise « 37,99&nbsp;$ ». Une
+  // premiere version n'acceptait que la premiere forme : la collecte
+  // francaise — la seule que le sitemap propose — rendait zero produit, sans
+  // la moindre erreur.
+  assert.equal(prixCanadien('$37.99'), 37.99);
+  assert.equal(prixCanadien('37,99&nbsp;$'), 37.99);
+
+  // L'espace insecable arrive en ENTITE, pas en caractere : le retirer des
+  // caracteres seulement laissait « 10,99nbsp » — illisible.
+  assert.equal(prixCanadien('10,99&nbsp;$</span>'), 10.99);
+
+  // Milliers : espace en francais, virgule en anglais.
+  assert.equal(prixCanadien('1 299,99 $'), 1299.99);
+  assert.equal(prixCanadien('$1,299.99'), 1299.99);
+
+  // Le montant peut etre imbrique dans des balises.
+  assert.equal(prixCanadien('<span><b>249,99</b>&nbsp;$</span>'), 249.99);
+
+  // Et ce qui n'est pas un prix ne doit pas en devenir un.
+  assert.equal(prixCanadien(''), null);
+  assert.equal(prixCanadien('Rupture de stock'), null);
 });

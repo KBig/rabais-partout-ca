@@ -35,6 +35,14 @@ export interface CrawlResult {
 
 const FLUSH_EVERY = 400;
 
+/**
+ * Duree maximale avant ecriture, meme lot incomplet.
+ *
+ * Garantit un signe de vie regulier et borne ce qu'une interruption fait
+ * perdre, quelle que soit la lenteur du magasin.
+ */
+const FLUSH_AFTER_MS = 45_000;
+
 /** Deux prix sont « identiques » à un cent près (évite le bruit des flottants). */
 const samePrice = (a: number | null, b: number | null) =>
   a === null && b === null ? true : a === null || b === null ? false : Math.abs(a - b) < 0.005;
@@ -198,10 +206,24 @@ export async function crawl(opts: CrawlOptions): Promise<CrawlResult> {
   try {
     const source = pickSource(store.adapter, opts, ctx);
 
+    // On ecrit sur DEUX conditions : assez de produits, OU assez de temps.
+    //
+    // Le seul seuil de 400 convenait aux collectes rapides, ou il tombe toutes
+    // les dix secondes. Sur un magasin qui demande une requete par fiche a une
+    // demi-requete par seconde — Costco — il ne tombait qu'au bout d'une
+    // demi-heure : aucun signe de vie, et tout perdu si le processus s'arrete.
+    let dernierEcrit = Date.now();
+
     for await (const product of source) {
       buffer.push(product);
-      if (buffer.length >= FLUSH_EVERY) {
+
+      const assezDeProduits = buffer.length >= FLUSH_EVERY;
+      const assezDeTemps =
+        buffer.length > 0 && Date.now() - dernierEcrit >= FLUSH_AFTER_MS;
+
+      if (assezDeProduits || assezDeTemps) {
         await flush();
+        dernierEcrit = Date.now();
         log(`  … ${stats.seen} produits traités`);
       }
     }

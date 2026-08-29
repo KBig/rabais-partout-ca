@@ -3,6 +3,7 @@ import { bestBuyAdapter } from './stores/bestbuy';
 import { neweggAdapter } from './stores/newegg';
 import { ikeaAdapter } from './stores/ikea';
 import { costcoAdapter } from './stores/costco';
+import { canadianTireAdapter } from './stores/canadiantire';
 import {
   createShopifyAdapter,
   REGLES_MAISON,
@@ -94,6 +95,7 @@ export const STORES: StoreMeta[] = [
     // Leur robots.txt demande 10 s entre deux requetes. On les respecte : cela
     // borne la collecte a environ 8 600 produits par jour.
     requestsPerSecond: 0.1,
+    adapter: canadianTireAdapter,
   },
   {
     id: 'costco-ca',
@@ -103,7 +105,7 @@ export const STORES: StoreMeta[] = [
     currency: 'CAD',
     homepage: 'https://www.costco.ca',
     color: '#005DAA',
-    requestsPerSecond: 0.5,
+    requestsPerSecond: 2,
     // Une requete par fiche : cadence prudente, ils ne declarent aucun
     // Crawl-delay mais 8 736 fiches meritent d'etre prises sans brusquer.
     adapter: costcoAdapter,
