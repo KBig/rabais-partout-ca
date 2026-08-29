@@ -71,7 +71,13 @@ export const STORES: StoreMeta[] = [
     homepage: 'https://www.walmart.ca',
     color: '#0071CE',
     requestsPerSecond: 0.5,
-    blocked: 'Défi anti-robot : leurs fiches produit redirigent vers « Verify Your Identity », et leur robots.txt interdit API et recherche.',
+    blocked:
+      'Deux refus distincts. Leurs fiches produit redirigent vers un défi ' +
+      '« Verify Your Identity », et leur robots.txt interdit API et recherche. ' +
+      'Surtout, les conditions de leur API officielle excluent explicitement ' +
+      'son usage « par des concurrents pour analyser les prix ou la ' +
+      'disponibilité » — ce qui vise précisément un comparateur. Même la porte ' +
+      'officielle est fermée à cet usage.',
   },
   {
     id: 'canadiantire-ca',
@@ -81,7 +87,9 @@ export const STORES: StoreMeta[] = [
     currency: 'CAD',
     homepage: 'https://www.canadiantire.ca',
     color: '#C8102E',
-    requestsPerSecond: 1,
+    // Leur robots.txt demande 10 s entre deux requetes. On les respecte : cela
+    // borne la collecte a environ 8 600 produits par jour.
+    requestsPerSecond: 0.1,
   },
   {
     id: 'costco-ca',
@@ -92,7 +100,6 @@ export const STORES: StoreMeta[] = [
     homepage: 'https://www.costco.ca',
     color: '#005DAA',
     requestsPerSecond: 0.5,
-    blocked: 'Défi anti-robot sur les pages de rayon.',
   },
   {
     id: 'amazon-ca',
@@ -123,7 +130,10 @@ export const STORES: StoreMeta[] = [
     homepage: 'https://www.memoryexpress.com',
     color: '#00A94F',
     requestsPerSecond: 0.75,
-    blocked: 'Répond 403 à toute requête automatisée.',
+    blocked:
+      'Répond 403 même avec des en-têtes de navigation complets. Une partie de ' +
+      'leur catalogue reste accessible : ils vendent aussi sur Newegg, que nous ' +
+      'collectons.',
   },
 
   {
