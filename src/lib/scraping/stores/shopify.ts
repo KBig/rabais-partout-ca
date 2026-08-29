@@ -139,13 +139,32 @@ export interface ShopifyStoreConfig {
   ignore?: readonly RegExp[];
 }
 
-/** Rattache un type de produit à l'une de nos catégories, ou à rien. */
+/**
+ * Rattache un produit à l'une de nos catégories, ou à rien.
+ *
+ * Le champ `product_type` est LAISSE VIDE par beaucoup de marchands : chez
+ * Bouclair, il l'est pour tout le catalogue, et la premiere version de cet
+ * adaptateur n'y collectait donc aucun produit. Le titre, lui, dit toujours de
+ * quoi il s'agit — « Floor Lamp Ceramic Base », « White 4-Piece Bamboo Sheet
+ * Set ». On s'y rabat, puis sur les etiquettes.
+ *
+ * L'ordre reste celui de la fiabilite : un type declare par le marchand vaut
+ * mieux qu'un mot devine dans un titre.
+ */
 export function slugPourType(
   type: string,
   cfg: ShopifyStoreConfig,
+  titre = '',
+  tags = '',
 ): string | null {
-  for (const motif of cfg.ignore ?? []) if (motif.test(type)) return null;
-  for (const [motif, slug] of cfg.rules) if (motif.test(type)) return slug;
+  for (const motif of cfg.ignore ?? []) {
+    if (motif.test(type) || motif.test(titre)) return null;
+  }
+
+  for (const source of [type, titre, tags]) {
+    if (!source) continue;
+    for (const [motif, slug] of cfg.rules) if (motif.test(source)) return slug;
+  }
   return null;
 }
 
@@ -244,7 +263,8 @@ async function* parcourir(
     if (lot.length === 0) break;
 
     for (const p of lot) {
-      const slug = slugPourType(p.product_type ?? '', cfg);
+      const etiquettes = Array.isArray(p.tags) ? p.tags.join(' ') : (p.tags ?? '');
+      const slug = slugPourType(p.product_type ?? '', cfg, p.title ?? '', etiquettes);
       if (!slug) continue;
       if (filtre && slug !== filtre) continue;
 
@@ -338,6 +358,30 @@ export const REGLES_MAISON: ReadonlyArray<readonly [RegExp, string]> = [
   // --- électronique --------------------------------------------------------
   [/\btv\b|television|téléviseur|soundbar|barre de son/i, 'televiseurs'],
   [/speaker|headphone|audio|haut-parleur|écouteur/i, 'audio'],
+];
+
+/**
+ * Vocabulaire des enseignes de mode, de decoration et de loisirs creatifs.
+ *
+ * Les meubles et l'electromenager ne couvrent pas tout : Frank And Oak vend du
+ * vetement, DeSerres du materiel d'artiste, Clement des articles pour enfants.
+ * Meme discipline que partout ailleurs — un type non reconnu est IGNORE.
+ */
+export const REGLES_MODE: ReadonlyArray<readonly [RegExp, string]> = [
+  [/shirt|tee|sweater|hoodie|jacket|coat|pant|jean|dress|skirt|blouse|chandail|manteau|pantalon|robe|jupe/i, 'vetements'],
+  [/shoe|boot|sneaker|sandal|chaussure|botte|espadrille/i, 'accessoires-mode'],
+  [/bag|backpack|purse|wallet|luggage|sac|sacoche|valise/i, 'bagages'],
+  [/jewel|necklace|bracelet|earring|ring\b|bijou|collier|boucle/i, 'bijoux'],
+  [/watch|montre/i, 'montres-mode'],
+  [/baby|infant|toddler|stroller|bebe|poussette/i, 'bebe'],
+  [/toy|game|puzzle|jouet|jeu/i, 'jouets'],
+  [/paint|brush|canvas|easel|marker|pencil|sketch|peinture|pinceau|toile|crayon/i, 'papeterie'],
+  [/paper|notebook|journal|papier|cahier/i, 'papier'],
+  [/mattress|pillow|duvet|matelas|oreiller|couette/i, 'literie'],
+  [/lamp|lighting|lampe|luminaire/i, 'luminaires'],
+  [/\brug\b|cushion|curtain|mirror|vase|frame|tapis|coussin|rideau|miroir|cadre/i, 'decoration'],
+  [/cookware|dinnerware|glassware|vaisselle|casserole/i, 'cuisine'],
+  [/storage|basket|bin|rangement|panier/i, 'rangement'],
 ];
 
 /** Types à ne jamais collecter : ce ne sont pas des produits comparables. */

@@ -1,9 +1,11 @@
 import type { StoreMeta } from './types';
 import { bestBuyAdapter } from './stores/bestbuy';
 import { neweggAdapter } from './stores/newegg';
+import { ikeaAdapter } from './stores/ikea';
 import {
   createShopifyAdapter,
   REGLES_MAISON,
+  REGLES_MODE,
   IGNORER_MAISON,
 } from './stores/shopify';
 
@@ -61,6 +63,7 @@ export const STORES: StoreMeta[] = [
     homepage: 'https://www.ikea.com/ca/fr/',
     color: '#0058A3',
     requestsPerSecond: 1,
+    adapter: ikeaAdapter,
   },
   {
     id: 'walmart-ca',
@@ -287,6 +290,103 @@ export const STORES: StoreMeta[] = [
     homepage: 'https://www.marshalls.ca',
     color: '#0033A0',
     requestsPerSecond: 0.5,
+  },
+
+  {
+    id: 'bouclair-ca',
+    name: 'Bouclair',
+    kind: 'retailer',
+    country: 'CA',
+    currency: 'CAD',
+    homepage: 'https://www.bouclair.com',
+    color: '#8C1D40',
+    requestsPerSecond: 0.75,
+    adapter: createShopifyAdapter({
+      id: 'bouclair-ca',
+      base: 'https://www.bouclair.com',
+      rules: [...REGLES_MAISON, ...REGLES_MODE],
+      ignore: IGNORER_MAISON,
+    }),
+  },
+  {
+    id: 'casper-ca',
+    name: 'Casper',
+    kind: 'retailer',
+    country: 'CA',
+    currency: 'CAD',
+    homepage: 'https://casper.com',
+    color: '#0B3D91',
+    requestsPerSecond: 0.75,
+    adapter: createShopifyAdapter({
+      id: 'casper-ca',
+      base: 'https://casper.com',
+      rules: REGLES_MAISON,
+      ignore: IGNORER_MAISON,
+    }),
+  },
+  {
+    id: 'umbra-ca',
+    name: 'Umbra',
+    kind: 'retailer',
+    country: 'CA',
+    currency: 'CAD',
+    homepage: 'https://ca.umbra.com',
+    color: '#1D1D1B',
+    requestsPerSecond: 0.75,
+    adapter: createShopifyAdapter({
+      id: 'umbra-ca',
+      base: 'https://ca.umbra.com',
+      rules: [...REGLES_MAISON, ...REGLES_MODE],
+      ignore: IGNORER_MAISON,
+    }),
+  },
+  {
+    id: 'frankandoak-ca',
+    name: 'Frank And Oak',
+    kind: 'retailer',
+    country: 'CA',
+    currency: 'CAD',
+    homepage: 'https://www.frankandoak.com',
+    color: '#2E3B4E',
+    requestsPerSecond: 0.75,
+    adapter: createShopifyAdapter({
+      id: 'frankandoak-ca',
+      base: 'https://www.frankandoak.com',
+      rules: REGLES_MODE,
+      ignore: IGNORER_MAISON,
+    }),
+  },
+  {
+    id: 'clement-ca',
+    name: 'Clement',
+    kind: 'retailer',
+    country: 'CA',
+    currency: 'CAD',
+    homepage: 'https://www.clement.ca',
+    color: '#E4002B',
+    requestsPerSecond: 0.75,
+    adapter: createShopifyAdapter({
+      id: 'clement-ca',
+      base: 'https://www.clement.ca',
+      rules: REGLES_MODE,
+      ignore: IGNORER_MAISON,
+    }),
+  },
+  {
+    id: 'deserres-ca',
+    name: 'DeSerres',
+    kind: 'retailer',
+    country: 'CA',
+    currency: 'CAD',
+    homepage: 'https://www.deserres.ca',
+    color: '#009B48',
+    requestsPerSecond: 0.75,
+    adapter: createShopifyAdapter({
+      id: 'deserres-ca',
+      base: 'https://www.deserres.ca',
+      rules: REGLES_MODE,
+      ignore: IGNORER_MAISON,
+    }),
   },
 
   // ---------------------------------------------------------------- fabricants
