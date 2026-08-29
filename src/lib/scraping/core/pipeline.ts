@@ -1,5 +1,6 @@
 import { db, nowIso } from '../../db/index';
 import { getStore } from '../registry';
+import { libererVerrousPerimes, collecteEnCours } from './planification';
 import { HttpClient } from './http';
 import type { CrawlContext, CrawlStrategy, RawProduct } from '../types';
 
@@ -129,6 +130,30 @@ function sanitizeListPrice(listPrice: number | null, price: number): number | nu
 }
 
 export async function crawl(opts: CrawlOptions): Promise<CrawlResult> {
+  // UN SEUL PASSAGE A LA FOIS PAR MAGASIN.
+  //
+  // Deux collectes du meme magasin se disputent la cadence autorisee et le
+  // verrou d'ecriture : chacune croit avancer a la vitesse permise, les deux
+  // vont deux fois moins vite, et les mesures deviennent fausses. C'est arrive
+  // quatre fois de suite sur IKEA sans que rien ne le signale.
+  //
+  // Les verrous laisses par un processus disparu sont liberes d'abord : sinon
+  // un plantage interdirait a jamais de recollecter ce magasin.
+  libererVerrousPerimes(opts.log ?? (() => {}));
+  if (collecteEnCours(opts.storeId)) {
+    const msg = `Une collecte de ${opts.storeId} est deja en cours — ignoree.`;
+    (opts.log ?? console.log)(msg);
+    return {
+      runId: 0,
+      status: 'skipped',
+      seen: 0,
+      created: 0,
+      priceChanges: 0,
+      requests: 0,
+      error: msg,
+    };
+  }
+
   const conn = db();
   const store = getStore(opts.storeId);
   const log = opts.log ?? (() => {});

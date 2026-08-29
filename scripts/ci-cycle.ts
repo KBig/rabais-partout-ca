@@ -16,7 +16,7 @@ import { migrate, db } from '../src/lib/db/index';
 import { seedReferenceData } from '../src/lib/db/seed';
 import { crawl, retireStaleProducts } from '../src/lib/scraping/core/pipeline';
 import { enrichStore } from '../src/lib/enrichment/runner';
-import { liveStores } from '../src/lib/scraping/registry';
+import { magasinsParPeremption } from '../src/lib/scraping/core/planification';
 import { scoreAll } from '../src/lib/pricing/score';
 import { syncManufacturerReferences } from '../src/lib/enrichment/msrp';
 import { reconcile, electVariantLeads } from '../src/lib/scraping/core/coherence';
@@ -57,19 +57,26 @@ const before = db().prepare('SELECT COUNT(*) n FROM price_points').get() as { n:
 const totals = { seen: 0, created: 0, changes: 0, requests: 0 };
 
 /**
- * L'ORDRE DE PASSAGE TOURNE D'UN CYCLE A L'AUTRE.
+ * ON COLLECTE D'ABORD LE PLUS PERIME.
  *
- * Avec un seul magasin, l'ordre etait sans objet. Avec dix et un budget de
- * quinze minutes, commencer toujours par le meme voudrait dire que le dernier
- * n'est jamais atteint : ses prix ne bougeraient jamais, et son historique
- * resterait vide.
+ * Une rotation par l'heure, essayee d'abord, ne regarde pas ce qui a besoin
+ * d'etre rafraichi : Best Buy est reste dix-neuf heures sans releve pendant
+ * qu'IKEA etait collecte trois fois de suite.
  *
- * On decale donc le point de depart a chaque execution, en s'appuyant sur
- * l'heure — deterministe, sans etat a conserver, et reparti sur la journee.
+ * La peremption est la seule regle utile. Un magasin frais attend, un magasin
+ * oublie passe devant, et l'historique de prix devient regulier pour tout le
+ * monde — ce qui est exactement ce qu'on cherche a mesurer.
  */
-const magasins = liveStores();
-const depart = Math.floor(Date.now() / 3_600_000) % Math.max(1, magasins.length);
-const ordre = [...magasins.slice(depart), ...magasins.slice(0, depart)];
+const classement = magasinsParPeremption();
+const ordre = classement.map((m) => m.store);
+
+log(
+  'Ordre de passage : ' +
+    classement
+      .slice(0, 5)
+      .map((m) => `${m.store.name} (${m.heures === null ? 'jamais' : Math.round(m.heures) + ' h'})`)
+      .join(', '),
+);
 
 /**
  * Budget par magasin.
