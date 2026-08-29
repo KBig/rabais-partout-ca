@@ -63,9 +63,13 @@ const INDEX_TTL_DAYS = 14;
  * plus courte — la plus precise, en general — la page de support gagnait
  * systematiquement. Mesure chez Samsung : 10 347 des 14 206 URL indexees, soit
  * 73 % de l'index, et AUCUN prix extrait.
+ *
+ * Meme chose pour les rubriques « business » : la fiche existe, la page se
+ * charge, mais le tarif professionnel passe par un devis. Verifie sur
+ * samsung.com/ca_fr/business/tvs/... — 539 Ko servis, aucun prix.
  */
 const PAGES_SANS_PRIX =
-  /\/(support|soutien|manual|manuel|driver|pilote|download|telecharg|faq|service|warranty|garantie|how-to|community|forum|register|repair|contact)(\/|$|-)/i;
+  /\/(support|soutien|manual|manuel|driver|pilote|download|telecharg|faq|service|warranty|garantie|how-to|community|forum|register|repair|contact|business|entreprise|pro|b2b)(\/|$|-)/i;
 
 /** Clé de rapprochement : « QN65QN80HAFXZC » et « qn65-qn80hafxzc » se rejoignent. */
 export const modelKey = (model: string) => model.toUpperCase().replace(/[^A-Z0-9]/g, '');

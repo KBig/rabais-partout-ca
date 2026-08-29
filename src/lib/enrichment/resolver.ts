@@ -128,6 +128,23 @@ export async function resolveEnrichment(
   const withHistogram = results.find((r) => r.facts.ratingHistogram);
   if (withHistogram) facts.ratingHistogram = withHistogram.facts.ratingHistogram ?? null;
 
+  // --- Prix constructeur ----------------------------------------------------
+  //
+  // Ce bloc manquait, et son absence annulait toute la chaine en silence : la
+  // source ouvrait bien la fiche du fabricant, en extrayait bien le prix, et le
+  // resolveur le jetait en recopiant tous les autres champs sauf celui-la. Le
+  // moteur voyait donc toujours « aucun prix constructeur », sans la moindre
+  // erreur nulle part.
+  //
+  // Aucune fusion : une seule source produit ce fait, et deux fabricants ne
+  // publient jamais le prix du meme produit. On prend celle qui a repondu.
+  const avecPdsf = results.find((r) => (r.facts.manufacturerPrice ?? 0) > 0);
+  if (avecPdsf) {
+    facts.manufacturerPrice = avecPdsf.facts.manufacturerPrice ?? null;
+    facts.manufacturerName = avecPdsf.facts.manufacturerName ?? null;
+    facts.manufacturerUrl = avecPdsf.facts.manufacturerUrl ?? null;
+  }
+
   // Une seule source qui répond : rien à corroborer. On plafonne l'accord à
   // 0,6 pour ne jamais faire passer une source isolée pour une certitude.
   const agreement =

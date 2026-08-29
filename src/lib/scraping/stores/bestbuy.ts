@@ -175,11 +175,20 @@ function extractModel(name: string): string | null {
   if (!m) return null;
   const brut = m[1];
 
-  // Une reference melange TOUJOURS lettres et chiffres. Sans ce controle, les
-  // parentheses de « Galaxy Tab S10+ (Plus) » ou « ThinkPad L13 (2024) »
-  // donnaient « Plus » et « 2024 » comme numeros de modele — de quoi
-  // interroger le mauvais fabricant, ou personne.
-  if (!/[A-Z]/i.test(brut) || !/\d/.test(brut)) return null;
+  // Ce qui suit ecarte le bruit sans jeter de vraies references.
+  //
+  // Les parentheses d'un titre contiennent parfois autre chose qu'un modele :
+  // « Galaxy Tab S10+ (Plus) » et « ThinkPad L13 (2024) » donnaient « Plus » et
+  // « 2024 ». Interroger un fabricant avec ca ne mene nulle part.
+  //
+  // Mais un numero de piece PEUT etre entierement numerique — « 100012589 » en
+  // est un. Une premiere version exigeait lettres ET chiffres et supprimait
+  // 11 596 modeles parfaitement valides. La regle porte donc sur la FORME :
+  //   - au moins un chiffre, toujours ;
+  //   - si tout est numerique, il faut assez de chiffres pour que ce ne soit
+  //     ni une annee ni une quantite.
+  if (!/\d/.test(brut)) return null;
+  if (!/[A-Z]/i.test(brut) && brut.replace(/\D/g, '').length < 6) return null;
   if (/^(19|20)\d{2}$/.test(brut)) return null;
 
   return brut;
