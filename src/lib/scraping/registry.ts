@@ -1,5 +1,6 @@
 import type { StoreMeta } from './types';
 import { bestBuyAdapter } from './stores/bestbuy';
+import { neweggAdapter } from './stores/newegg';
 
 /**
  * Registre des sources de prix.
@@ -31,6 +32,20 @@ export const STORES: StoreMeta[] = [
     color: '#0046BE',
     requestsPerSecond: 1.5,
     adapter: bestBuyAdapter,
+  },
+  {
+    id: 'newegg-ca',
+    name: 'Newegg',
+    kind: 'retailer',
+    country: 'CA',
+    currency: 'CAD',
+    homepage: 'https://www.newegg.ca',
+    color: '#F7A21D',
+    // Leur robots.txt ne declare aucun Crawl-delay pour le groupe « * ».
+    // On reste sous la cadence de Best Buy : leurs pages font 1 Mo, contre
+    // quelques dizaines de kilo-octets pour une reponse d'API.
+    requestsPerSecond: 1,
+    adapter: neweggAdapter,
   },
   {
     id: 'ikea-ca',
@@ -101,16 +116,6 @@ export const STORES: StoreMeta[] = [
     homepage: 'https://www.memoryexpress.com',
     color: '#00A94F',
     requestsPerSecond: 0.75,
-  },
-  {
-    id: 'newegg-ca',
-    name: 'Newegg',
-    kind: 'retailer',
-    country: 'CA',
-    currency: 'CAD',
-    homepage: 'https://www.newegg.ca',
-    color: '#F7A31B',
-    requestsPerSecond: 0.5,
   },
 
   // ---------------------------------------------------------------- fabricants
