@@ -502,9 +502,13 @@ export function priceHistory(productId: number): HistoryPoint[] {
 }
 
 /** Même modèle chez d'autres marchands — devient utile dès le 2e magasin. */
+/** Meme normalisation que la colonne `model_key`, cote application. */
+export const modelKeyOf = (model: string) =>
+  model.toUpperCase().replace(/[-\s.]/g, '');
+
 export function competingOffers(product: DealRow): DealRow[] {
   if (!product.model) return [];
-  const key = product.model.toUpperCase().replace(/[-\s]/g, '');
+  const key = modelKeyOf(product.model);
 
   // UN prix par marchand : le meilleur.
   //
@@ -517,11 +521,10 @@ export function competingOffers(product: DealRow): DealRow[] {
     .prepare(
       `${SELECT_DEAL}
         WHERE p.store_id != ? AND p.is_active = 1
-          AND REPLACE(REPLACE(UPPER(p.model), '-', ''), ' ', '') = ?
+          AND p.model_key = ?
           AND p.current_price = (
             SELECT MIN(q.current_price) FROM products q
-             WHERE q.store_id = p.store_id AND q.is_active = 1
-               AND REPLACE(REPLACE(UPPER(q.model), '-', ''), ' ', '') = ?
+             WHERE q.store_id = p.store_id AND q.is_active = 1 AND q.model_key = ?
           )
         GROUP BY p.store_id
         ORDER BY p.current_price ASC LIMIT 6`,
@@ -1156,10 +1159,26 @@ export interface CategoryCount {
  * correct, mais 110 ms sur un catalogue de 200 000 lignes, payés sur deux pages
  * du site.
  */
+/**
+ * Cache de l'arbre des categories.
+ *
+ * Ce comptage agrege 330 000 lignes : 150 ms, sur une donnee qui ne bouge
+ * qu'apres une collecte. Il apparait sur l'accueil, sur chaque rayon et sur
+ * chaque page de magasin — soit trois fois le meme travail par visite.
+ */
+let cacheCategories = new Map<string, { expires: number; data: CategoryCount[] }>();
+
+export function invalidateCategoryCache() {
+  cacheCategories = new Map();
+}
+
 export function categoriesWithCounts(storeId?: string): CategoryCount[] {
+  const cle = storeId ?? '*';
+  const enCache = cacheCategories.get(cle);
+  if (enCache && enCache.expires > Date.now()) return enCache.data;
   // Restreint a une enseigne quand on demande « que vend Canac ? ». Sans
   // argument, le comportement reste celui du catalogue entier.
-  return db()
+  const lignes = db()
     .prepare(
       `WITH totaux AS (
          SELECT category_slug AS slug,
@@ -1178,6 +1197,9 @@ export function categoriesWithCounts(storeId?: string): CategoryCount[] {
         ORDER BY c.sort_order`,
     )
     .all({ store: storeId ?? null }) as CategoryCount[];
+
+  cacheCategories.set(cle, { expires: Date.now() + CACHE_TTL_MS, data: lignes });
+  return lignes;
 }
 
 export interface SiteStats {

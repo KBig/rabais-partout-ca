@@ -89,6 +89,19 @@ export function reconcile(log: (m: string) => void = () => {}): CoherenceResult 
       WHERE is_active = 1 AND id BETWEEN ? AND ?`,
   );
 
+  // --- 1bis. Cle de modele normalisee -------------------------------------
+  //
+  // Elle sert au rapprochement entre magasins. Calculee ici plutot qu'a
+  // l'ingestion pour qu'un changement de regle s'applique au catalogue entier
+  // sans recollecte, comme la cle de variante.
+  parLots(
+    conn,
+    `UPDATE products
+        SET model_key = UPPER(REPLACE(REPLACE(REPLACE(model, '-', ''), ' ', ''), '.', ''))
+      WHERE is_active = 1 AND id BETWEEN ? AND ?
+        AND model IS NOT NULL AND model <> ''`,
+  );
+
   // --- 2. Une unité boîte ouverte est le même produit que le neuf ----------
   //
   // 1 292 articles n'avaient aucune image, presque tous en boîte ouverte : le
