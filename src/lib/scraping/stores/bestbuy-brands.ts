@@ -288,14 +288,26 @@ export async function harvestBrands(
   // La liste des marques est stable et coûte 38 sitemaps gzippés à découvrir.
   // On la relit donc en base tant qu'elle n'a pas vieilli : une passe suivante
   // ne repaie que l'étiquetage, qui est le travail utile.
+  //
+  // La reprise s'appuie sur `discovered_at`, PAS sur le fait qu'une marque ait
+  // déjà été traitée. La confusion entre les deux avait un effet vicieux : une
+  // passe partielle n'écrivait que les marques traitées, et la passe suivante
+  // reprenait cette liste tronquée en la croyant complète.
+  const limite = new Date(Date.now() - SLUGS_TTL_DAYS * 86_400_000).toISOString();
   const connus = conn
     .prepare<[string, string], { slug: string }>(
       `SELECT slug FROM store_brands
-        WHERE store_id = ? AND checked_at > ? AND facet IS NOT NULL
+        WHERE store_id = ? AND discovered_at > ?
         ORDER BY slug`,
     )
-    .all(storeId, new Date(Date.now() - SLUGS_TTL_DAYS * 86_400_000).toISOString())
+    .all(storeId, limite)
     .map((r) => r.slug);
+
+  const noteDecouverte = conn.prepare<[string, string, string, string]>(
+    `INSERT INTO store_brands (store_id, slug, checked_at, discovered_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(store_id, slug) DO UPDATE SET discovered_at = excluded.discovered_at`,
+  );
 
   let slugs: string[];
   if (connus.length > 0 && !opts.rediscover) {
@@ -305,6 +317,13 @@ export async function harvestBrands(
     log('Découverte des marques via le sitemap…');
     slugs = await discoverBrandSlugs(http, log, signal);
     log(`${slugs.length} marques trouvées.`);
+
+    // Écrit AVANT tout traitement : une interruption laisse alors une liste
+    // complète, réutilisable telle quelle à la reprise.
+    const ts = nowIso();
+    conn.transaction(() => {
+      for (const slug of slugs) noteDecouverte.run(storeId, slug, ts, ts);
+    })();
   }
   if (opts.only) slugs = slugs.slice(0, opts.only);
 
