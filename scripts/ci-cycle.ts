@@ -19,6 +19,9 @@ import { enrichStore } from '../src/lib/enrichment/runner';
 import { liveStores } from '../src/lib/scraping/registry';
 import { scoreAll } from '../src/lib/pricing/score';
 import { syncManufacturerReferences } from '../src/lib/enrichment/msrp';
+import { reconcile, electVariantLeads } from '../src/lib/scraping/core/coherence';
+import { buildSpecDistribution } from '../src/lib/quality/components';
+import { closeRenderer } from '../src/lib/scraping/core/renderer';
 
 const arg = (n: string) => {
   const i = process.argv.indexOf(`--${n}`);
@@ -53,17 +56,55 @@ const before = db().prepare('SELECT COUNT(*) n FROM price_points').get() as { n:
 
 const totals = { seen: 0, created: 0, changes: 0, requests: 0 };
 
-for (const store of liveStores()) {
+/**
+ * L'ORDRE DE PASSAGE TOURNE D'UN CYCLE A L'AUTRE.
+ *
+ * Avec un seul magasin, l'ordre etait sans objet. Avec dix et un budget de
+ * quinze minutes, commencer toujours par le meme voudrait dire que le dernier
+ * n'est jamais atteint : ses prix ne bougeraient jamais, et son historique
+ * resterait vide.
+ *
+ * On decale donc le point de depart a chaque execution, en s'appuyant sur
+ * l'heure — deterministe, sans etat a conserver, et reparti sur la journee.
+ */
+const magasins = liveStores();
+const depart = Math.floor(Date.now() / 3_600_000) % Math.max(1, magasins.length);
+const ordre = [...magasins.slice(depart), ...magasins.slice(0, depart)];
+
+/**
+ * Budget par magasin.
+ *
+ * Sans plafond, le premier de la liste consommait tout le temps disponible et
+ * les suivants n'etaient jamais visites. Chacun recoit sa part, et le temps
+ * rendu par un magasin rapide profite aux suivants.
+ */
+const budgetParMagasin = (restants: number) =>
+  Math.max(60_000, (deadline - Date.now()) / Math.max(1, restants));
+
+for (const [rang, store] of ordre.entries()) {
   if (controller.signal.aborted) break;
+
+  // Un magasin qui exige un navigateur ne tourne pas dans un cycle court :
+  // dix secondes par page imposees par le marchand n'y tiennent pas. Il se
+  // collecte a part, sur une machine dediee.
+  if (store.id === 'canadiantire-ca') {
+    log(`${store.name} · ignore en cycle court (Crawl-delay de 10 s impose)`);
+    continue;
+  }
+
+  const limite = new AbortController();
+  const fin = setTimeout(() => limite.abort(), budgetParMagasin(ordre.length - rang));
+  const signal = AbortSignal.any([controller.signal, limite.signal]);
 
   const res = await crawl({
     storeId: store.id,
     strategy: 'deals',
     maxProducts: 12000,
     maxPages: 160,
-    signal: controller.signal,
+    signal,
     log: () => {},
   });
+  clearTimeout(fin);
 
   totals.seen += res.seen;
   totals.created += res.created;
@@ -101,7 +142,24 @@ for (const store of liveStores()) {
 const msrp = syncManufacturerReferences();
 if (msrp.written > 0) log(`${msrp.written} prix de référence constructeur rapprochés`);
 
+// La mise en coherence precede le calcul : elle corrige des faits dont le
+// score depend — image heritee d'une unite boite ouverte, note sans avis.
+reconcile((m) => log(m.trim()));
+
 const scored = scoreAll();
+
+// Le representant d'un groupe de variantes est celui qui ressort le mieux :
+// il faut donc les scores pour le designer.
+const masquees = electVariantLeads();
+if (masquees > 0) log(`${masquees} variante(s) masquee(s) du classement`);
+
+// Les distributions de caracteristiques suivent le marche : elles doivent etre
+// recalculees quand le catalogue bouge, sinon « 16 Go » serait juge d'apres un
+// marche d'il y a six mois.
+const specs = buildSpecDistribution(() => {});
+log(`${specs.caracteristiques} caracteristiques indexees, ${specs.retenues} distributions`);
+
+await closeRenderer();
 const after = db().prepare('SELECT COUNT(*) n FROM price_points').get() as { n: number };
 
 // Compacte le fichier avant archivage : le job le téléverse ensuite, et chaque

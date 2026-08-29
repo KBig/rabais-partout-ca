@@ -1,4 +1,5 @@
 import type { StoreAdapter, RawProduct, CrawlContext } from '../types';
+import { enParallele } from '../core/parallele';
 
 /**
  * ADAPTATEUR SHOPIFY GÉNÉRIQUE.
@@ -250,17 +251,35 @@ async function* parcourir(
   let emis = 0;
   const parSlug = new Map<string, number>();
 
-  for (let page = 1; page <= Math.min(MAX_PAGES, ctx.limits.maxPages); page++) {
-    if (ctx.signal.aborted || emis >= ctx.limits.maxProducts) break;
+  // Les pages sont independantes et numerotees : on peut en demander plusieurs
+  // a la fois plutot que d'attendre chacune. Le limiteur garde la cadence.
+  const pages = Array.from(
+    { length: Math.min(MAX_PAGES, ctx.limits.maxPages) },
+    (_, i) => i + 1,
+  );
 
-    const url = `${cfg.base}/products.json?limit=${PAGE_SIZE}&page=${page}`;
-    let lot: ShopifyProduct[];
-    try {
-      lot = (await ctx.getJson<{ products?: ShopifyProduct[] }>(url)).products ?? [];
-    } catch {
-      break;
-    }
-    if (lot.length === 0) break;
+  let finies = false;
+  const lots = enParallele(
+    pages,
+    6,
+    async (page) => {
+      if (finies) return [];
+      const url = `${cfg.base}/products.json?limit=${PAGE_SIZE}&page=${page}`;
+      try {
+        const r = (await ctx.getJson<{ products?: ShopifyProduct[] }>(url)).products ?? [];
+        // Une page vide signale la fin du catalogue : inutile d'en demander
+        // d'autres, elles seront vides aussi.
+        if (r.length === 0) finies = true;
+        return r;
+      } catch {
+        return [];
+      }
+    },
+    () => finies || ctx.signal.aborted || emis >= ctx.limits.maxProducts,
+  );
+
+  for await (const lot of lots) {
+    if (ctx.signal.aborted || emis >= ctx.limits.maxProducts) break;
 
     for (const p of lot) {
       const etiquettes = Array.isArray(p.tags) ? p.tags.join(' ') : (p.tags ?? '');

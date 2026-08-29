@@ -26,8 +26,13 @@ import {
  * visibles dans l'interface avec le statut « bientôt disponible ». Ajouter une
  * source = écrire un fichier dans stores/ puis brancher `adapter` ici.
  *
- * `requestsPerSecond` est volontairement conservateur. Un scraper poli tient
- * des années ; un scraper agressif se fait bloquer en une après-midi.
+ * `requestsPerSecond` suit ce que le marchand DEMANDE, pas ce qu'on suppose.
+ *
+ * Canadian Tire declare `Crawl-delay: 10` : on tient dix secondes entre deux
+ * pages, et c'est non negociable. Les autres ne declarent rien — une cadence
+ * d'une requete par seconde etait alors une prudence excessive, qui coutait des
+ * heures pour rien. Quelques requetes par seconde restent negligeables pour une
+ * enseigne nationale, et le parallelisme fait le reste.
  */
 export const STORES: StoreMeta[] = [
   // ---------------------------------------------------------------- détaillants
@@ -39,7 +44,7 @@ export const STORES: StoreMeta[] = [
     currency: 'CAD',
     homepage: 'https://www.bestbuy.ca',
     color: '#0046BE',
-    requestsPerSecond: 1.5,
+    requestsPerSecond: 4,
     adapter: bestBuyAdapter,
   },
   {
@@ -53,7 +58,7 @@ export const STORES: StoreMeta[] = [
     // Leur robots.txt ne declare aucun Crawl-delay pour le groupe « * ».
     // On reste sous la cadence de Best Buy : leurs pages font 1 Mo, contre
     // quelques dizaines de kilo-octets pour une reponse d'API.
-    requestsPerSecond: 1,
+    requestsPerSecond: 3,
     adapter: neweggAdapter,
   },
   {
@@ -64,7 +69,7 @@ export const STORES: StoreMeta[] = [
     currency: 'CAD',
     homepage: 'https://www.ikea.com/ca/fr/',
     color: '#0058A3',
-    requestsPerSecond: 1,
+    requestsPerSecond: 5,
     adapter: ikeaAdapter,
   },
   {
@@ -105,7 +110,7 @@ export const STORES: StoreMeta[] = [
     currency: 'CAD',
     homepage: 'https://www.costco.ca',
     color: '#005DAA',
-    requestsPerSecond: 4,
+    requestsPerSecond: 6,
     // Une requete par fiche : cadence prudente, ils ne declarent aucun
     // Crawl-delay mais 8 736 fiches meritent d'etre prises sans brusquer.
     adapter: costcoAdapter,
@@ -153,7 +158,7 @@ export const STORES: StoreMeta[] = [
     currency: 'CAD',
     homepage: 'https://www.thebrick.com',
     color: '#D6001C',
-    requestsPerSecond: 0.75,
+    requestsPerSecond: 3,
     adapter: createShopifyAdapter({
       id: 'brick-ca',
       base: 'https://www.thebrick.com',
@@ -169,7 +174,7 @@ export const STORES: StoreMeta[] = [
     currency: 'CAD',
     homepage: 'https://www.leons.ca',
     color: '#E31837',
-    requestsPerSecond: 0.75,
+    requestsPerSecond: 3,
     adapter: createShopifyAdapter({
       id: 'leons-ca',
       base: 'https://www.leons.ca',
@@ -306,7 +311,7 @@ export const STORES: StoreMeta[] = [
     currency: 'CAD',
     homepage: 'https://www.bouclair.com',
     color: '#8C1D40',
-    requestsPerSecond: 0.75,
+    requestsPerSecond: 3,
     adapter: createShopifyAdapter({
       id: 'bouclair-ca',
       base: 'https://www.bouclair.com',
@@ -322,7 +327,7 @@ export const STORES: StoreMeta[] = [
     currency: 'CAD',
     homepage: 'https://casper.com',
     color: '#0B3D91',
-    requestsPerSecond: 0.75,
+    requestsPerSecond: 3,
     adapter: createShopifyAdapter({
       id: 'casper-ca',
       base: 'https://casper.com',
@@ -338,7 +343,7 @@ export const STORES: StoreMeta[] = [
     currency: 'CAD',
     homepage: 'https://ca.umbra.com',
     color: '#1D1D1B',
-    requestsPerSecond: 0.75,
+    requestsPerSecond: 3,
     adapter: createShopifyAdapter({
       id: 'umbra-ca',
       base: 'https://ca.umbra.com',
@@ -354,7 +359,7 @@ export const STORES: StoreMeta[] = [
     currency: 'CAD',
     homepage: 'https://www.frankandoak.com',
     color: '#2E3B4E',
-    requestsPerSecond: 0.75,
+    requestsPerSecond: 3,
     adapter: createShopifyAdapter({
       id: 'frankandoak-ca',
       base: 'https://www.frankandoak.com',
@@ -370,7 +375,7 @@ export const STORES: StoreMeta[] = [
     currency: 'CAD',
     homepage: 'https://www.clement.ca',
     color: '#E4002B',
-    requestsPerSecond: 0.75,
+    requestsPerSecond: 3,
     adapter: createShopifyAdapter({
       id: 'clement-ca',
       base: 'https://www.clement.ca',
@@ -386,7 +391,7 @@ export const STORES: StoreMeta[] = [
     currency: 'CAD',
     homepage: 'https://www.deserres.ca',
     color: '#009B48',
-    requestsPerSecond: 0.75,
+    requestsPerSecond: 3,
     adapter: createShopifyAdapter({
       id: 'deserres-ca',
       base: 'https://www.deserres.ca',

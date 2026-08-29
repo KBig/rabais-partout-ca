@@ -1,4 +1,5 @@
 import type { StoreAdapter, RawProduct, CrawlContext } from '../types';
+import { enParallele } from '../core/parallele';
 
 /**
  * Costco Canada.
@@ -236,41 +237,24 @@ async function* parcourir(ctx: CrawlContext, filtre?: string): AsyncGenerator<Ra
   let ignores = 0;
   let suivante = 0;
 
-  // FILE CONTINUE, pas des vagues.
-  //
-  // Une premiere version lancait six requetes puis attendait la fin des six
-  // avant de repartir : chaque tour durait celui de la fiche la plus lente, et
-  // cinq lignes restaient a ne rien faire. Ici, des qu'une fiche est finie, la
-  // suivante part — la cadence declaree redevient la seule limite.
-  const enCours = new Map<number, Promise<{ i: number; raw: RawProduct | null }>>();
+  // Les fiches sont independantes : la file continue relance des qu'une place
+  // se libere, ce qui laisse la cadence declaree seule maitresse du rythme.
+  const fiches = enParallele(
+    urls,
+    EN_PARALLELE,
+    async (url) => {
+      try {
+        // Lecture ecourtee : le bloc utile finit au sixieme du document.
+        return extraireFiche(await ctx.getPartial(url, assezLu), url);
+      } catch {
+        return null;
+      }
+    },
+    () => ctx.signal.aborted || emis >= ctx.limits.maxProducts,
+  );
 
-  const lancer = () => {
-    while (enCours.size < EN_PARALLELE && suivante < urls.length) {
-      const i = suivante++;
-      const url = urls[i];
-      enCours.set(
-        i,
-        (async () => {
-          try {
-            // Lecture ecourtee : le bloc utile finit au sixieme du document.
-            const html = await ctx.getPartial(url, assezLu);
-            return { i, raw: extraireFiche(html, url) };
-          } catch {
-            return { i, raw: null };
-          }
-        })(),
-      );
-    }
-  };
-
-  lancer();
-
-  while (enCours.size > 0) {
+  for await (const raw of fiches) {
     if (ctx.signal.aborted || emis >= ctx.limits.maxProducts) break;
-
-    const { i, raw } = await Promise.race(enCours.values());
-    enCours.delete(i);
-    lancer();
 
     if (!raw) {
       ignores++;

@@ -1,4 +1,5 @@
 import type { StoreAdapter, RawProduct, CrawlContext } from '../types';
+import { enParallele } from '../core/parallele';
 
 /**
  * IKEA Canada.
@@ -34,37 +35,78 @@ const API = 'https://sik.search.blue.cdtapps.com/ca/fr/product-list-page';
 const TAILLE = 1000;
 
 /**
- * Rayons IKEA, releves dans leur sitemap `cat-fr-CA`.
+ * Rattachement d'un produit a l'une de NOS categories.
  *
- * Le code est stable ; l'intitule sert a le rattacher a l'une de NOS
- * categories. On garde les rayons FEUILLES et on ecarte les rayons parents
- * (« tous les meubles », « exterieur »), qui reprennent le contenu de leurs
- * enfants et le compteraient deux fois.
+ * ----------------------------------------------------------------------------
+ * PAR SON FIL D'ARIANE, PAS PAR SON RAYON
+ * ----------------------------------------------------------------------------
+ *
+ * Une premiere version listait vingt-deux codes de rayon ecrits a la main.
+ * Elle en manquait deux cent soixante-quatorze : leur sitemap en publie 296,
+ * dont la plupart sous un format numerique que mon filtre ignorait. Le
+ * catalogue s'arretait a 5 435 articles.
+ *
+ * Chaque produit porte pourtant son propre chemin — « Canapes et fauteuils >
+ * Canapes > Canapes trois places ». On classe donc a partir de LUI : on
+ * parcourt tous les rayons pour la couverture, et le produit dit lui-meme ou
+ * il va. Plus de liste a tenir a jour.
  */
-const RAYONS: ReadonlyArray<readonly [string, string]> = [
-  ['fu003', 'salon'], // canapés
-  ['fu006', 'salon'], // fauteuils et chaises d'appoint
-  ['fu004', 'bureau-meubles'], // tables et bureaux
-  ['fu002', 'salle-a-manger'], // tables et chaises
-  ['st003', 'rangement'], // vitrines et meubles de rangement
-  ['st006', 'rangement'], // rangement mural
-  ['st007', 'rangement'], // petits rangements
-  ['bm003', 'chambre'], // lits
-  ['bm002', 'literie'], // matelas
-  ['tl004', 'literie'], // literie
-  ['tl001', 'decoration'], // textiles pour la maison
-  ['tl002', 'decoration'], // rideaux et stores
-  ['tl003', 'decoration'], // textiles salle de bains
-  ['li002', 'luminaires'], // suspensions et appliques
-  ['pp001', 'decoration'], // plantes, pots et cache-pots
-  ['ka003', 'cuisine'], // rangements pour cuisine
-  ['ka002', 'petits-electro'], // électroménagers
-  ['ba001', 'maison'], // salle de bains
-  ['od003', 'jardinage'], // mobilier d'extérieur
-  ['hs001', 'maison-intelligente'],
-  ['lc001', 'maison'], // lessive et nettoyage
-  ['bc003', 'bebe'], // enfants
+const REGLES: ReadonlyArray<readonly [RegExp, string]> = [
+  // --- meubles, du plus precis au plus general ----------------------------
+  [/canap|fauteuil|causeuse|sofa|repose-pied/i, 'salon'],
+  [/table basse|table d.appoint|meuble t[ée]l|banc tv/i, 'salon'],
+  [/salle [àa] manger|table et chaise|chaise de cuisine|tabouret/i, 'salle-a-manger'],
+  [/\blit\b|lits|matelas|sommier|t[êe]te de lit|commode|table de chevet/i, 'chambre'],
+  [/bureau|chaise de bureau|si[èe]ge de bureau/i, 'bureau-meubles'],
+  [/[ée]tag[èe]re|biblioth[èe]que|rangement|armoire|vitrine|penderie|casier|bo[îi]te/i, 'rangement'],
+
+  // --- literie et textiles -------------------------------------------------
+  [/matelas|surmatelas|oreiller|couette|housse de couette|drap|literie|couverture/i, 'literie'],
+  [/rideau|store|voilage/i, 'decoration'],
+  [/tapis|coussin|jet[ée]|plaid|cadre|miroir|d[ée]coration|bougie|vase|plante|pot/i, 'decoration'],
+
+  // --- luminaires ----------------------------------------------------------
+  [/lampe|luminaire|suspension|applique|ampoule|[ée]clairage|abat-jour/i, 'luminaires'],
+
+  // --- cuisine -------------------------------------------------------------
+  [/[ée]lectrom[ée]nager|four|plaque|hotte|lave-vaisselle|r[ée]frig[ée]rateur/i, 'gros-electro'],
+  [/cafeti[èe]re|bouilloire|grille-pain|mixeur|robot culinaire/i, 'petits-electro'],
+  [/vaisselle|assiette|verre|couvert|casserole|po[êe]le|ustensile|cuisson|batterie de cuisine/i, 'cuisine'],
+  [/cuisine|[ée]vier|robinet|fa[çc]ade|comptoir|tiroir/i, 'cuisine'],
+
+  // --- salle de bains, buanderie ------------------------------------------
+  [/salle de bain|serviette|douche|lavabo|toilette/i, 'maison'],
+  [/lessive|nettoyage|buanderie|recyclage|poubelle/i, 'maison'],
+
+  // --- exterieur -----------------------------------------------------------
+  [/ext[ée]rieur|jardin|balcon|terrasse|barbecue/i, 'jardinage'],
+
+  // --- enfant, jeu ---------------------------------------------------------
+  [/b[ée]b[ée]|nourrisson|langer|poussette/i, 'bebe'],
+  [/enfant|jouet|peluche|jeu/i, 'jouets'],
+
+  // --- divers --------------------------------------------------------------
+  [/maison intelligente|connect[ée]|domotique/i, 'maison-intelligente'],
+  [/haut-parleur|enceinte|son\b/i, 'audio'],
+  [/animal|chat|chien/i, 'animaux'],
+  [/outil|quincaillerie|vis|fixation/i, 'quincaillerie'],
 ];
+
+/** Ce qui n'est pas un produit comparable. */
+const IGNORER =
+  /carte-cadeau|service|livraison|montage|installation|garantie|restaurant|bistro|[ée]picerie su[ée]doise|repas/i;
+
+/** Classe un produit d'apres son propre fil d'Ariane. */
+export function slugPourChemin(chemin: readonly string[]): string | null {
+  const texte = chemin.join(' ');
+  if (IGNORER.test(texte)) return null;
+
+  // Du plus precis au plus general : le dernier niveau decrit le mieux.
+  for (const niveau of [...chemin].reverse()) {
+    for (const [motif, slug] of REGLES) if (motif.test(niveau)) return slug;
+  }
+  return null;
+}
 
 interface IkeaProduct {
   name?: string;
@@ -87,7 +129,7 @@ interface IkeaResponse {
   };
 }
 
-function toRawProduct(p: IkeaProduct, slug: string): RawProduct | null {
+function toRawProduct(p: IkeaProduct): RawProduct | null {
   const prix = p.salesPrice?.numeral;
   if (!p.itemNo || typeof prix !== 'number' || prix <= 0) return null;
 
@@ -98,11 +140,15 @@ function toRawProduct(p: IkeaProduct, slug: string): RawProduct | null {
   if (!titre) return null;
 
   // Le fil d'Ariane decrit le produit mieux qu'un intitule de rayon : il sert
-  // de descriptif a l'extraction des caracteristiques.
-  const chemin = (p.categoryPath ?? [])
+  // a la fois a le classer et a decrire ses caracteristiques.
+  const niveaux = (p.categoryPath ?? [])
     .map((c) => c.name)
-    .filter(Boolean)
-    .join(' · ');
+    .filter((n): n is string => Boolean(n));
+
+  const slug = slugPourChemin([...niveaux, p.typeName ?? '', titre]);
+  if (!slug) return null;
+
+  const chemin = niveaux.join(' · ');
 
   return {
     sku: p.itemNo,
@@ -132,32 +178,71 @@ function toRawProduct(p: IkeaProduct, slug: string): RawProduct | null {
   };
 }
 
-async function* parcourir(
-  rayons: ReadonlyArray<readonly [string, string]>,
-  ctx: CrawlContext,
-): AsyncGenerator<RawProduct> {
+/**
+ * Les rayons, tous, lus dans leur sitemap.
+ *
+ * 296 y sont publies. Les parcourir tous coute 296 requetes — une par rayon,
+ * puisque `size=1000` ramene chacun d'un coup. Les recoupements entre rayon
+ * parent et sous-rayon sont absorbes par la deduplication sur le numero
+ * d'article.
+ */
+async function codesRayons(ctx: CrawlContext): Promise<string[]> {
+  const xml = await ctx.getText('https://www.ikea.com/sitemaps/cat-fr-CA_1.xml');
+  const codes = new Set<string>();
+
+  for (const m of xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)) {
+    // Deux formats coexistent : « fu003 » pour les grands rayons, un nombre
+    // pour les sous-rayons. Ne prendre que le premier laissait de cote 274
+    // rayons sur 296.
+    const code = m[1].match(/\/cat\/[a-z0-9-]+-([a-z]{2}\d{3}|\d{6,})\/?$/i)?.[1];
+    if (code) codes.add(code);
+  }
+  return [...codes];
+}
+
+async function* parcourir(ctx: CrawlContext, filtre?: string): AsyncGenerator<RawProduct> {
+  const codes = await codesRayons(ctx);
+  ctx.log(`  ${codes.length} rayons publies par leur sitemap`);
+
+  const vus = new Set<string>();
   let emis = 0;
+  const parSlug = new Map<string, number>();
 
-  for (const [code, slug] of rayons) {
-    if (ctx.signal.aborted || emis >= ctx.limits.maxProducts) return;
+  // Les rayons sont independants : rien n'oblige a attendre la reponse de l'un
+  // pour demander le suivant. Le limiteur de debit garde la main sur la cadence.
+  const lots = enParallele(
+    codes,
+    8,
+    async (code) => {
+      try {
+        return await ctx.getJson<IkeaResponse>(`${API}?category=${code}&size=${TAILLE}`);
+      } catch {
+        return null; // un rayon indisponible ne doit pas interrompre les autres
+      }
+    },
+    () => ctx.signal.aborted || emis >= ctx.limits.maxProducts,
+  );
 
-    let data: IkeaResponse;
-    try {
-      data = await ctx.getJson<IkeaResponse>(`${API}?category=${code}&size=${TAILLE}`);
-    } catch {
-      continue; // un rayon indisponible ne doit pas interrompre les autres
-    }
+  for await (const data of lots) {
+    if (ctx.signal.aborted || emis >= ctx.limits.maxProducts) break;
+    if (!data) continue;
 
-    const lot = data.productListPage?.productWindow ?? [];
-    let pris = 0;
-    for (const p of lot) {
-      const raw = toRawProduct(p, slug);
+    for (const p of data.productListPage?.productWindow ?? []) {
+      if (!p.itemNo || vus.has(p.itemNo)) continue;
+
+      const raw = toRawProduct(p);
       if (!raw) continue;
+      if (filtre && raw.categorySlug !== filtre) continue;
+
+      vus.add(p.itemNo);
+      parSlug.set(raw.categorySlug!, (parSlug.get(raw.categorySlug!) ?? 0) + 1);
       yield raw;
-      pris++;
       if (++emis >= ctx.limits.maxProducts) break;
     }
-    if (pris > 0) ctx.log(`  ${code} (${slug}) -> ${pris} produits`);
+  }
+
+  for (const [slug, n] of [...parSlug].sort((a, b) => b[1] - a[1]).slice(0, 10)) {
+    ctx.log(`  ${slug} ← ${n} produits`);
   }
 }
 
@@ -168,18 +253,13 @@ export const ikeaAdapter: StoreAdapter = {
   // et l'API de rayon suffit a couvrir le catalogue.
   capabilities: { deals: true, categories: true, search: false },
 
-  categories: [...new Set(RAYONS.map(([, s]) => s))],
+  categories: [...new Set(REGLES.map(([, s]) => s))],
 
   async *listCategory(slug, ctx) {
-    const cibles = RAYONS.filter(([, s]) => s === slug);
-    if (cibles.length === 0) {
-      ctx.log(`  (aucun rayon IKEA mappé pour "${slug}")`);
-      return;
-    }
-    yield* parcourir(cibles, ctx);
+    yield* parcourir(ctx, slug);
   },
 
   async *listDeals(ctx) {
-    yield* parcourir(RAYONS, ctx);
+    yield* parcourir(ctx);
   },
 };

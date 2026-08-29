@@ -7,10 +7,21 @@
 # laisser allumée en permanence ; GitHub le fait gratuitement.
 #
 # CADENCE : ce dépôt est PRIVÉ, donc le quota gratuit est de 2 000 minutes par
-# mois. Un cycle de 25 min toutes les 12 h consomme ~1 500 min/mois — on reste
-# confortablement dans le quota, avec de la marge pour les vérifications de
-# qualité. (Sur un dépôt public, Actions est illimité et une cadence de 6 h
-# serait possible : il suffirait de changer le cron ci-dessous.)
+# mois. Le calcul décide de tout :
+#
+#   12 h × 25 min = 2 passages/jour = 1 500 min/mois   (ancienne cadence)
+#    6 h × 15 min = 4 passages/jour = 1 800 min/mois   (celle-ci)
+#
+# Même quota, DEUX FOIS plus de relevés. C'est la répétition qui construit
+# l'historique, pas la durée d'un passage isolé : quatre relevés par jour
+# datent un changement de prix à six heures près, contre douze auparavant.
+#
+# Le budget plus court impose en revanche de le répartir : dix magasins en
+# quinze minutes, ce serait toujours le premier servi et jamais le dernier.
+# `ci-cycle` fait donc tourner l'ordre de passage d'un cycle à l'autre.
+#
+# Sur un dépôt public, Actions est illimité : une cadence de 2 h deviendrait
+# possible en changeant la seule ligne `cron` ci-dessous.
 #
 # OÙ VIT LA BASE
 # --------------
@@ -23,10 +34,10 @@ name: Collecte des prix
 
 on:
   schedule:
-    # Toutes les 12 heures. GitHub planifie en UTC et peut décaler de quelques
+    # Toutes les 6 heures. GitHub planifie en UTC et peut décaler de quelques
     # minutes en période de charge : sans importance ici, on veut de la
     # régularité, pas de la précision.
-    - cron: '0 */12 * * *'
+    - cron: '0 */6 * * *'
   # Permet de déclencher un cycle à la main depuis l'onglet Actions.
   workflow_dispatch:
 
@@ -42,7 +53,7 @@ permissions:
 jobs:
   collecte:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
@@ -70,7 +81,7 @@ jobs:
             || echo "Aucune base existante — démarrage à vide."
 
       - name: Cycle de collecte
-        run: npm run ci:cycle -- --minutes 25
+        run: npm run ci:cycle -- --minutes 15
 
       - name: Archiver la base
         env:
