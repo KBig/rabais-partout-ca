@@ -25,11 +25,13 @@
     "export:public": "tsx scripts/export-public.ts",
     "sitemaps": "tsx scripts/sitemaps.ts",
     "brands": "tsx scripts/brands.ts",
-    "specs": "tsx scripts/specs.ts"
+    "specs": "tsx scripts/specs.ts",
+    "sync": "tsx scripts/sync.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",
     "better-sqlite3": "^13.0.3",
+    "fzstd": "^0.1.1",
     "next": "^16.3.3",
     "playwright-core": "^1.62.1",
     "react": "^19.2.8",

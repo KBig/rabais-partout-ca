@@ -53,7 +53,11 @@ permissions:
 jobs:
   collecte:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # La base pese pres d'un gigaoctet : la telecharger, la decompresser, la
+    # recompresser et la reverser prend environ six minutes en plus des quinze
+    # de collecte. Le plafond precedent de trente minutes ne laissait presque
+    # aucune marge, et un job coupe au milieu n'archive rien.
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v4
