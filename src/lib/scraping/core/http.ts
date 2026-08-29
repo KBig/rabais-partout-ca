@@ -156,6 +156,54 @@ export class HttpClient {
     return (await res.json()) as T;
   }
 
+  /**
+   * Lit une reponse EN FLUX et s'arrete des qu'on en a assez.
+   *
+   * Une fiche Costco pese 2,3 Mo, mais le bloc JSON-LD qui nous interesse se
+   * termine a 376 Ko — seize pour cent du document. Tout telecharger revenait
+   * a demander vingt gigaoctets pour en exploiter trois.
+   *
+   * On coupe donc la connexion des que `assez` dit que c'est bon. Le marchand
+   * economise la bande passante, et la collecte va six fois plus vite.
+   */
+  async getPartial(
+    url: string,
+    assez: (contenu: string) => boolean,
+    init: RequestInit = {},
+    signal?: AbortSignal,
+    maxOctets = 3_000_000,
+  ): Promise<string> {
+    const res = await this.raw(
+      url,
+      { ...init, headers: { Accept: 'text/html,*/*', ...(init.headers as any) } },
+      signal,
+    );
+
+    const flux = res.body;
+    if (!flux) return res.text();
+
+    const lecteur = flux.getReader();
+    const decodeur = new TextDecoder();
+    let contenu = '';
+    let lus = 0;
+
+    try {
+      while (lus < maxOctets) {
+        const { done, value } = await lecteur.read();
+        if (done) break;
+        lus += value.byteLength;
+        contenu += decodeur.decode(value, { stream: true });
+        if (assez(contenu)) break;
+      }
+    } finally {
+      // Annuler libere la connexion : sans cela, le serveur continuerait
+      // d'envoyer le reste du document dans le vide.
+      await lecteur.cancel().catch(() => {});
+    }
+
+    return contenu;
+  }
+
   async getText(url: string, init: RequestInit = {}, signal?: AbortSignal): Promise<string> {
     const res = await this.raw(
       url,

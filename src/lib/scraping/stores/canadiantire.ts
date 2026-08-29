@@ -266,6 +266,9 @@ async function* parcourir(ctx: CrawlContext, filtre?: string): AsyncGenerator<Ra
           vues = await rendu.snapshots(adresse, {
             attendre: 'a[href*="/pdp/"]',
             defiler: true,
+            // Leurs pages mettent parfois plus de 45 s a repondre : couper
+            // trop tot faisait perdre le rayon entier.
+            timeoutMs: 75_000,
             // Seules les cartes nous interessent : le reste de la page pese
             // dix fois plus et faisait planter le navigateur.
             fragment: 'a[href*="/pdp/"]',

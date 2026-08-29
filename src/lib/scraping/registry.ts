@@ -105,7 +105,7 @@ export const STORES: StoreMeta[] = [
     currency: 'CAD',
     homepage: 'https://www.costco.ca',
     color: '#005DAA',
-    requestsPerSecond: 2,
+    requestsPerSecond: 4,
     // Une requete par fiche : cadence prudente, ils ne declarent aucun
     // Crawl-delay mais 8 736 fiches meritent d'etre prises sans brusquer.
     adapter: costcoAdapter,

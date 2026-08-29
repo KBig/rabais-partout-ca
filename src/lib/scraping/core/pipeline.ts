@@ -169,6 +169,7 @@ export async function crawl(opts: CrawlOptions): Promise<CrawlResult> {
     log,
     getJson: (url, init) => http.getJson(url, init, controller.signal),
     getText: (url, init) => http.getText(url, init, controller.signal),
+    getPartial: (url, assez) => http.getPartial(url, assez, {}, controller.signal),
     requests: () => http.requestCount,
   };
 

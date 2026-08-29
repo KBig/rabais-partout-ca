@@ -73,6 +73,13 @@ export interface CrawlContext {
   getJson: <T = any>(url: string, init?: RequestInit) => Promise<T>;
   /** GET texte brut (HTML). */
   getText: (url: string, init?: RequestInit) => Promise<string>;
+  /**
+   * GET qui s'ARRETE des qu'on en a assez.
+   *
+   * Pour les pages lourdes dont on n'exploite qu'un fragment situe tot dans le
+   * document. Evite de telecharger — et de faire servir — le reste.
+   */
+  getPartial: (url: string, assez: (contenu: string) => boolean) => Promise<string>;
   /** Compteur de requêtes, pour les stats de run. */
   requests: () => number;
 }

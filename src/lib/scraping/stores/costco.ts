@@ -212,24 +212,66 @@ async function urlsProduit(ctx: CrawlContext): Promise<string[]> {
   return urls;
 }
 
+/**
+ * Nombre de fiches lues en meme temps.
+ *
+ * Le limiteur de debit espace les DEPARTS ; rien n'oblige a attendre la fin
+ * d'une reponse avant de lancer la suivante. En sequentiel, une fiche a 330 ms
+ * plafonnait la collecte a trois par seconde quoi qu'on regle. En parallele,
+ * c'est la cadence declaree qui commande.
+ */
+const EN_PARALLELE = 12;
+
+/** On s'arrete de lire des que le bloc produit est complet. */
+const assezLu = (contenu: string): boolean => {
+  const i = contenu.indexOf('"@type":"Product"');
+  return i >= 0 && contenu.indexOf('</script>', i) >= 0;
+};
+
 async function* parcourir(ctx: CrawlContext, filtre?: string): AsyncGenerator<RawProduct> {
   const urls = await urlsProduit(ctx);
   ctx.log(`  ${urls.length} fiches produit listees par leur sitemap`);
 
   let emis = 0;
   let ignores = 0;
+  let suivante = 0;
 
-  for (const url of urls) {
+  // FILE CONTINUE, pas des vagues.
+  //
+  // Une premiere version lancait six requetes puis attendait la fin des six
+  // avant de repartir : chaque tour durait celui de la fiche la plus lente, et
+  // cinq lignes restaient a ne rien faire. Ici, des qu'une fiche est finie, la
+  // suivante part — la cadence declaree redevient la seule limite.
+  const enCours = new Map<number, Promise<{ i: number; raw: RawProduct | null }>>();
+
+  const lancer = () => {
+    while (enCours.size < EN_PARALLELE && suivante < urls.length) {
+      const i = suivante++;
+      const url = urls[i];
+      enCours.set(
+        i,
+        (async () => {
+          try {
+            // Lecture ecourtee : le bloc utile finit au sixieme du document.
+            const html = await ctx.getPartial(url, assezLu);
+            return { i, raw: extraireFiche(html, url) };
+          } catch {
+            return { i, raw: null };
+          }
+        })(),
+      );
+    }
+  };
+
+  lancer();
+
+  while (enCours.size > 0) {
     if (ctx.signal.aborted || emis >= ctx.limits.maxProducts) break;
 
-    let html: string;
-    try {
-      html = await ctx.getText(url);
-    } catch {
-      continue;
-    }
+    const { i, raw } = await Promise.race(enCours.values());
+    enCours.delete(i);
+    lancer();
 
-    const raw = extraireFiche(html, url);
     if (!raw) {
       ignores++;
       continue;
@@ -238,7 +280,7 @@ async function* parcourir(ctx: CrawlContext, filtre?: string): AsyncGenerator<Ra
 
     yield raw;
     emis++;
-    if (emis % 200 === 0) ctx.log(`  … ${emis} produits (${ignores} ignorés)`);
+    if (emis % 200 === 0) ctx.log(`  … ${emis} produits retenus (${ignores} ecartes)`);
   }
 }
 
