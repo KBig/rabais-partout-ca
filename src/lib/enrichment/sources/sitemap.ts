@@ -53,6 +53,7 @@ async function collectUrls(
   root: string,
   http: EnrichmentHttp,
   log: (m: string) => void,
+  garder?: RegExp,
 ): Promise<string[]> {
   const vus = new Set<string>();
   const aVisiter = [{ url: root, depth: 0 }];
@@ -77,10 +78,19 @@ async function collectUrls(
     const estIndex = /<sitemapindex/i.test(xml);
 
     if (estIndex && depth < MAX_DEPTH) {
-      for (const l of locs) aVisiter.push({ url: l, depth: depth + 1 });
+      // Les sous-sitemaps qui portent la region visee passent EN PREMIER.
+      //
+      // Sans ce tri, ASUS indexait ses pages africaines : son index est trie
+      // alphabetiquement, « africa-fr » vient avant « ca-en », et le plafond de
+      // MAX_SITEMAPS etait atteint bien avant d'arriver au Canada. Les fiches
+      // ramenees n'affichaient alors aucun prix canadien.
+      const tries = garder
+        ? [...locs].sort((a, b) => Number(garder.test(b)) - Number(garder.test(a)))
+        : locs;
+      for (const l of tries) aVisiter.push({ url: l, depth: depth + 1 });
       log(`    ${locs.length} sous-sitemap(s) dans ${url.split('/').pop()}`);
     } else {
-      pages.push(...locs);
+      pages.push(...(garder ? locs.filter((l) => garder.test(l)) : locs));
     }
   }
 
@@ -105,11 +115,13 @@ export async function buildSitemapIndex(
   sitemapUrl: string,
   http: EnrichmentHttp,
   log: (m: string) => void = () => {},
+  urlFilter?: string,
 ): Promise<IndexResult> {
   const conn = db();
 
-  log(`  ${brand} : lecture de ${sitemapUrl}`);
-  const urls = await collectUrls(sitemapUrl, http, log);
+  const garder = urlFilter ? new RegExp(urlFilter, 'i') : undefined;
+  log(`  ${brand} : lecture de ${sitemapUrl}${garder ? ` (filtre ${urlFilter})` : ''}`);
+  const urls = await collectUrls(sitemapUrl, http, log, garder);
 
   const insert = conn.prepare(
     `INSERT INTO manufacturer_urls (brand, model_key, url, fetched_at)

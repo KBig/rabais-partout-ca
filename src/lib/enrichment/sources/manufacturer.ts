@@ -69,6 +69,15 @@ export interface BrandSite {
    * Le moteur de recherche du site, lui, est rendu en JavaScript et inutilisable.
    */
   sitemapUrl?: string;
+  /**
+   * Motif que doivent respecter les URL retenues du sitemap.
+   *
+   * Les fabricants publient un sitemap MONDIAL. Sans filtre, on indexe des
+   * fiches africaines ou asiatiques dont la page n'affiche aucun prix
+   * canadien — et le plafond de sitemaps est atteint avant d'arriver au bon
+   * pays, l'index etant trie alphabetiquement.
+   */
+  urlFilter?: string;
   /** Gabarit d'URL de recherche ; `{model}` est remplacé par le modèle. */
   searchUrl: string;
   /**
@@ -98,14 +107,51 @@ export const BRAND_SITES: BrandSite[] = [
     sitemapUrl: 'https://www.samsung.com/ca_fr/sitemap.xml',
     verified: true,
   },
+  {
+    brand: 'sony',
+    name: 'Sony',
+    searchUrl: 'https://www.sony.ca/fr/search?q={model}',
+    sitemapUrl: 'https://www.sony.ca/sitemap.xml',
+    urlFilter: '/fr/',
+    // Verifie : fiche /fr/audio/... -> 1 bloc JSON-LD, prix 24,99 $ extrait.
+    verified: true,
+  },
+  {
+    brand: 'bose',
+    name: 'Bose',
+    searchUrl: 'https://www.bose.ca/fr_ca/search.html?q={model}',
+    sitemapUrl: 'https://www.bose.ca/sitemap_index.xml',
+    urlFilter: '/p/',
+    // Verifie : fiche /fr/p/sets/... -> 3 blocs JSON-LD, prix 548 $ extrait.
+    verified: true,
+  },
+  {
+    brand: 'asus',
+    name: 'ASUS',
+    searchUrl: 'https://www.asus.com/ca-en/search?q={model}',
+    sitemapUrl: 'https://www.asus.com/sitemap.xml',
+    // Indispensable ici : l'index mondial commence par « africa-fr ».
+    urlFilter: '/ca-en/',
+    // Verifie : fiche /ca-en/motherboards-components/... -> prix 59,99 $ extrait.
+    verified: true,
+  },
+
+  // --------------------------------------------------------------------------
+  // Non verifiees. Chacune a ete TESTEE et a echoue pour une raison precise ;
+  // les activer depenserait des requetes pour ne jamais rien rapporter.
+  // --------------------------------------------------------------------------
+  // LG      : fiches ca_fr servies avec du JSON-LD sans prix.
+  // Dell    : fiche produit servie, 3 blocs, prix charge en JavaScript ensuite.
+  // Acer    : les fiches ca-en repondent 403 a une requete automatisee.
+  // Lenovo  : pages canadiennes sans JSON-LD produit.
+  // Apple   : le sitemap /shop ne renvoie aucune URL exploitable.
+  // Dyson   : sitemap en 403.
   { brand: 'lg', name: 'LG', searchUrl: 'https://www.lg.com/ca_fr/search/?search={model}', verified: false },
   { brand: 'dell', name: 'Dell', searchUrl: 'https://www.dell.com/fr-ca/search/{model}', verified: false },
   { brand: 'apple', name: 'Apple', searchUrl: 'https://www.apple.com/ca/fr/search/{model}', verified: false },
-  { brand: 'sony', name: 'Sony', searchUrl: 'https://www.sony.ca/fr/search?q={model}', verified: false },
   { brand: 'lenovo', name: 'Lenovo', searchUrl: 'https://www.lenovo.com/ca/fr/search?text={model}', verified: false },
   { brand: 'hp', name: 'HP', searchUrl: 'https://www.hp.com/ca-fr/search?q={model}', verified: false },
   { brand: 'dyson', name: 'Dyson', searchUrl: 'https://www.dysoncanada.ca/fr/search?q={model}', verified: false },
-  { brand: 'bose', name: 'Bose', searchUrl: 'https://www.bose.ca/fr_ca/search.html?q={model}', verified: false },
   { brand: 'philips', name: 'Philips', searchUrl: 'https://www.philips.ca/fr/search?q={model}', verified: false },
 ];
 

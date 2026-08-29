@@ -31,7 +31,7 @@ for (const b of cibles) {
     continue;
   }
   try {
-    await buildSitemapIndex(b.brand, b.sitemapUrl!, facade, (m) => console.log(m));
+    await buildSitemapIndex(b.brand, b.sitemapUrl!, facade, (m) => console.log(m), b.urlFilter);
   } catch (err) {
     console.log(`  ${b.name} : échec — ${err instanceof Error ? err.message : err}`);
   }

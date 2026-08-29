@@ -324,6 +324,51 @@ export function getProduct(id: number): DealRow | null {
   return row ? hydrate(row) : null;
 }
 
+export interface ManufacturerReference {
+  price: number;
+  notes: string | null;
+  sources: string[];
+  checkedAt: string;
+}
+
+/**
+ * Prix officiel du fabricant, quand on a pu l'obtenir.
+ *
+ * C'est la seule reference qui ne vienne ni du marchand ni de nous : elle est
+ * fixee par celui qui fabrique le produit. Un detaillant 200 $ en dessous fait
+ * un vrai rabais de 200 $, etabli sans historique et sans supposition.
+ *
+ * Elle n'entre PAS dans la courbe de prix : ce n'est pas une observation dans
+ * le temps, c'est un point d'ancrage. Melanger les deux ferait croire a un
+ * releve que nous n'avons jamais fait.
+ */
+export function manufacturerReference(productId: number): ManufacturerReference | null {
+  const r = db()
+    .prepare<[number], {
+      launch_price: number | null;
+      notes: string | null;
+      sources: string;
+      checked_at: string;
+    }>(
+      `SELECT launch_price, notes, sources, checked_at
+         FROM price_references
+        WHERE product_id = ? AND found = 1 AND launch_price IS NOT NULL`,
+    )
+    .get(productId);
+
+  if (!r?.launch_price) return null;
+
+  let sources: string[] = [];
+  try {
+    const brut = JSON.parse(r.sources);
+    if (Array.isArray(brut)) sources = brut.filter((x): x is string => typeof x === 'string');
+  } catch {
+    // Une provenance illisible ne doit pas empecher d'afficher le prix.
+  }
+
+  return { price: r.launch_price, notes: r.notes, sources, checkedAt: r.checked_at };
+}
+
 export interface HistoryPoint {
   price: number;
   listPrice: number | null;

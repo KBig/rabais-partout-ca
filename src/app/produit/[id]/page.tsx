@@ -8,6 +8,7 @@ import {
   comparables,
   categoryRank,
   topDeals,
+  manufacturerReference,
 } from '@/lib/db/queries';
 import { leadSentence } from '@/lib/specs';
 import { analyzeComponents } from '@/lib/quality/components';
@@ -43,6 +44,7 @@ export default async function ProductPage({
   const competitors = competingOffers(product);
   const alternatives = betterAlternatives(product);
   const face = comparables(product);
+  const pdsf = manufacturerReference(product.id);
   const rang = categoryRank(product);
   const composantes = analyzeComponents(
     product.title,
@@ -257,6 +259,35 @@ export default async function ProductPage({
             value={product.listPrice ? money(product.listPrice) : 'aucun'}
           />
         </dl>
+
+        {/*
+          Le prix du fabricant est une ANCRE, pas un point d'historique : il ne
+          rejoint pas la courbe, qui ne montre que ce que nous avons releve
+          nous-memes. Le confondre reviendrait a inventer une observation.
+        */}
+        {pdsf && (
+          <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-card border border-line bg-surface px-4 py-3">
+            <span className="text-[11px] uppercase tracking-wide text-faint">
+              Prix officiel du fabricant
+            </span>
+            <span className="tnum text-base font-semibold text-text">{money(pdsf.price)}</span>
+            {pdsf.price > product.price && (
+              <span className="tnum text-xs font-semibold text-brand">
+                {Math.round(((pdsf.price - product.price) / pdsf.price) * 100)} % en dessous
+              </span>
+            )}
+            {pdsf.sources[0] && (
+              <a
+                href={pdsf.sources[0]}
+                target="_blank"
+                rel="noreferrer nofollow"
+                className="text-[11px] text-muted underline decoration-line underline-offset-2 hover:text-text"
+              >
+                voir la fiche constructeur
+              </a>
+            )}
+          </div>
+        )}
       </section>
 
       <section>
