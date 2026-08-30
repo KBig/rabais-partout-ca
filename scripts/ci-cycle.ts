@@ -245,27 +245,47 @@ for (const [rang, store] of ordre.entries()) {
   }
 }
 
+/**
+ * CHAQUE ETAPE DIT COMBIEN DE TEMPS ELLE PREND.
+ *
+ * Le premier cycle reel sur GitHub s'est fait couper au bout de cinquante
+ * minutes. La collecte, elle, s'etait terminee a l'heure — quatorze minutes,
+ * exactement son budget. Les trente-cinq minutes suivantes n'ont produit
+ * AUCUNE ligne de journal : impossible de dire si la chaine travaillait
+ * lentement ou si elle etait bloquee.
+ *
+ * Sur ma machine cette chaine prend quatre minutes et demie. Un runner
+ * gratuit dispose de deux coeurs et d'un disque partage ; l'ecart etait
+ * previsible, mais il fallait pouvoir le CONSTATER.
+ */
+const etape = async <T>(nom: string, f: () => T | Promise<T>): Promise<T> => {
+  const t = Date.now();
+  const r = await f();
+  log(`${nom} — ${((Date.now() - t) / 1000).toFixed(0)} s`);
+  return r;
+};
+
 // Les prix constructeurs alimentent le signal de reference : ce rapprochement
 // doit precéder le calcul des scores. Aucune requête réseau, purement local.
-const msrp = syncManufacturerReferences();
-if (msrp.written > 0) log(`${msrp.written} prix de référence constructeur rapprochés`);
+const msrp = await etape('prix constructeurs', () => syncManufacturerReferences());
+if (msrp.written > 0) log(`  ${msrp.written} prix de référence rapprochés`);
 
 // La mise en coherence precede le calcul : elle corrige des faits dont le
 // score depend — image heritee d'une unite boite ouverte, note sans avis.
-reconcile((m) => log(m.trim()));
+await etape('mise en coherence', () => reconcile(() => {}));
 
-const scored = scoreAll();
+const scored = await etape('calcul des scores', () => scoreAll());
 
 // Le representant d'un groupe de variantes est celui qui ressort le mieux :
 // il faut donc les scores pour le designer.
-const masquees = electVariantLeads();
-if (masquees > 0) log(`${masquees} variante(s) masquee(s) du classement`);
+const masquees = await etape('representants de variantes', () => electVariantLeads());
+if (masquees > 0) log(`  ${masquees} variante(s) masquee(s) du classement`);
 
 // Les distributions de caracteristiques suivent le marche : elles doivent etre
 // recalculees quand le catalogue bouge, sinon « 16 Go » serait juge d'apres un
 // marche d'il y a six mois.
-const specs = buildSpecDistribution(() => {});
-log(`${specs.caracteristiques} caracteristiques indexees, ${specs.retenues} distributions`);
+const specs = await etape('caracteristiques', () => buildSpecDistribution(() => {}));
+log(`  ${specs.caracteristiques} caracteristiques indexees, ${specs.retenues} distributions`);
 
 await closeRenderer();
 const after = db().prepare('SELECT COUNT(*) n FROM price_points').get() as { n: number };

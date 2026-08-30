@@ -52,10 +52,18 @@ permissions:
 jobs:
   collecte:
     runs-on: ubuntu-latest
-    # Plafond de sécurité, pas une cible : un passage normal dure environ
-    # vingt-cinq minutes. Il sert à couper un job bloqué, jamais un job qui
-    # travaille — et un job coupé au milieu n'archive rien.
-    timeout-minutes: 50
+    # Plafond de sécurité, pas une cible.
+    #
+    # Le premier cycle reel s'est fait couper a cinquante minutes. La collecte
+    # avait fini a l'heure — quatorze minutes, son budget exact — mais la
+    # chaine de calcul qui suit a pris tout le reste. Elle demande quatre
+    # minutes et demie sur une machine de bureau ; un runner gratuit a deux
+    # coeurs et un disque partage, et met plusieurs fois plus.
+    #
+    # Un job coupe au milieu n'archive RIEN : tout le travail du cycle est
+    # perdu. Mieux vaut un plafond genereux, jamais atteint, qu'un plafond
+    # serre qui gaspille une heure de collecte.
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
@@ -114,7 +122,7 @@ jobs:
         run: echo "empreinte=$(npx tsx scripts/garde-base.ts empreinte)" >> "$GITHUB_OUTPUT"
 
       - name: Cycle de collecte
-        run: npm run ci:cycle -- --minutes 20
+        run: npm run ci:cycle -- --minutes 15
 
       # Perdre un cycle est réparable ; écraser la release avec une base qui a
       # fondu ne l'est pas.

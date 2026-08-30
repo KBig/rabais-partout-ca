@@ -45,9 +45,10 @@ permissions:
 jobs:
   canadiantire:
     runs-on: ubuntu-latest
-    # Trois heures de collecte, plus le transfert de la base et les calculs.
-    # Le plafond de six heures est celui de GitHub ; on reste dessous.
-    timeout-minutes: 230
+    # Trois heures de collecte, plus le transfert de la base et la chaine de
+    # calcul — qui prend nettement plus longtemps sur un runner que sur une
+    # machine de bureau. Le plafond de six heures est celui de GitHub.
+    timeout-minutes: 300
 
     steps:
       - uses: actions/checkout@v4
