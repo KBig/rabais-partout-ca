@@ -416,7 +416,19 @@ test('un materiau ne se juge que la ou il decrit le produit', () => {
 
 test('des pouces ne sont une diagonale que s’il y a un ecran', () => {
   assert.match(specDe('Televiseur 65 po', 'televiseurs', 'diagonale')!.label, /^Diagonale/);
-  assert.match(specDe('Hotte de 30 po', 'gros-electro', 'diagonale')!.label, /^Format/);
+
+  // Hors ecran, la mesure change de FAMILLE, pas seulement d'etiquette.
+  //
+  // Les deux regles partageaient « diagonale », et le filtre s'intitulait donc
+  // « Taille de l'ecran » sur une page de decorations de Noel. Verifier
+  // l'etiquette ne suffisait pas : elle etait deja juste. C'est le nom du
+  // groupe qui mentait, et c'est lui que ce test protege desormais.
+  assert.equal(
+    specDe('Hotte de 30 po', 'gros-electro', 'diagonale'),
+    undefined,
+    'une hotte ne porte pas de diagonale d ecran',
+  );
+  assert.match(specDe('Hotte de 30 po', 'gros-electro', 'encombrement')!.label, /^Format/);
 });
 
 test('un Bluetooth sans version annoncee n’est pas classe', () => {
