@@ -3,6 +3,18 @@ node_modules/
 data/*.db
 data/*.db-shm
 data/*.db-wal
+
+# Archives et copies de travail de la base.
+#
+# `.gitignore` ne couvrait que « *.db » : la version COMPRESSEE, elle, passait
+# au travers. Un `git add -A` l'a donc embarquee — 148 Mo, refuses par GitHub
+# qui plafonne a 100 Mo par fichier. La base ne vit pas dans Git : elle est
+# publiee comme piece jointe de release.
+data/*.zst
+data/*.gz
+data/publication.db
+data/*.neuve
+data/*.precedente
 *.tsbuildinfo
 next-env.d.ts
 .env*.local

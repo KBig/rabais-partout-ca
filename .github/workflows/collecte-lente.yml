@@ -1,61 +1,53 @@
-# Collecte automatique des prix, 24 h/24, gratuitement.
+# Canadian Tire, a part et longuement.
 #
-# POURQUOI CE FICHIER EXISTE
+# POURQUOI UN FICHIER SEPARE
 # --------------------------
-# Le seul moyen d'obtenir un vrai historique de prix, c'est de relever les prix
-# régulièrement pendant des semaines. Sur une machine personnelle il faudrait la
-# laisser allumée en permanence ; GitHub le fait gratuitement.
+# Ce marchand n'a pas le meme cout que les autres, et de loin. Mesure sur leur
+# site : vingt-quatre produits par chargement de page, `count=96` ignore, et
+# `Crawl-delay: 10` impose entre deux requetes — leur regle, qu'on respecte a
+# la lettre. Leur catalogue compte 174 000 articles, chiffre confirme par le
+# fichier `llms.txt` qu'ils publient a l'intention des agents.
 #
-# CADENCE : ce dépôt est PUBLIC, et GitHub Actions y est illimité. Le quota de
-# 2 000 minutes par mois, qui dictait tout jusqu'ici, ne s'applique plus.
+#   174 000 / 24 = 7 250 chargements
+#   7 250 x 10 s = 20 heures pour UN passage complet
 #
-# Ce qui borne la cadence désormais, ce sont les marchands eux-mêmes : leur
-# `robots.txt`, leur `Crawl-delay`, et le simple fait qu'il est inutile de
-# relever un prix qui n'a pas bougé. Toutes les trois heures est un rythme
-# généreux sans être insistant — huit relevés par jour datent un changement de
-# prix à trois heures près.
+# Le faire concourir avec douze autres enseignes dans un cycle de vingt minutes
+# ne menait nulle part : il recevait cinq minutes, soit trente pages, soit
+# sept cents produits par jour. Huit mois pour un tour.
 #
-# Le passage en public a suivi une constatation chiffrée : le catalogue de
-# Canadian Tire compte 174 000 articles, servis vingt-quatre par page avec dix
-# secondes d'attente imposée entre deux pages. Vingt heures pour un passage
-# complet. Sous l'ancien quota — cinq minutes par jour — il aurait fallu huit
-# mois. C'est le seul magasin dont le coût justifiait ce changement, et il a
-# sa propre planification, dans `collecte-lente.yml`.
+# Il lui faut donc une plage a lui : longue, rare, et surtout SEULE. Le verrou
+# de concurrence est partage avec le cycle general — les deux ecrivent la meme
+# base, et jamais en meme temps. Le cycle general qui tomberait pendant cette
+# plage attend son tour.
 #
-# OÙ VIT LA BASE
-# --------------
-# Pas dans le dépôt Git : elle grossit à chaque cycle et GitHub refuse les
-# fichiers de plus de 100 Mo. Elle est stockée comme **asset de release**
-# (jusqu'à 2 Go, gratuit), téléchargée au début du job et re-téléversée à la
-# fin. La release `db` sert de conteneur permanent.
+# Trois heures par jour couvrent le catalogue en une semaine, puis le
+# maintiennent a jour. Le curseur de pagination garantit que chaque passage
+# reprend ou le precedent s'est arrete, au lieu de relire eternellement les
+# memes premieres pages.
 
-name: Collecte des prix
+name: Collecte Canadian Tire
 
 on:
   schedule:
-    # Toutes les 3 heures. GitHub planifie en UTC et peut décaler de quelques
-    # minutes en période de charge : sans importance ici, on veut de la
-    # régularité, pas de la précision.
-    - cron: '0 */3 * * *'
-  # Permet de déclencher un cycle à la main depuis l'onglet Actions.
+    # Une fois par jour, a 4 h UTC — creux de trafic cote marchand.
+    - cron: '0 4 * * *'
   workflow_dispatch:
 
-# Un seul cycle à la fois : deux jobs concurrents écriraient la même base et le
-# dernier à finir écraserait le travail de l'autre.
+# MEME groupe que le cycle general : les deux ecrivent la meme base, et le
+# dernier a finir ecraserait le travail de l'autre.
 concurrency:
   group: collecte
   cancel-in-progress: false
 
 permissions:
-  contents: write # nécessaire pour téléverser la base sur la release
+  contents: write
 
 jobs:
-  collecte:
+  canadiantire:
     runs-on: ubuntu-latest
-    # Plafond de sécurité, pas une cible : un passage normal dure environ
-    # vingt-cinq minutes. Il sert à couper un job bloqué, jamais un job qui
-    # travaille — et un job coupé au milieu n'archive rien.
-    timeout-minutes: 50
+    # Trois heures de collecte, plus le transfert de la base et les calculs.
+    # Le plafond de six heures est celui de GitHub ; on reste dessous.
+    timeout-minutes: 230
 
     steps:
       - uses: actions/checkout@v4
@@ -113,8 +105,24 @@ jobs:
         id: avant
         run: echo "empreinte=$(npx tsx scripts/garde-base.ts empreinte)" >> "$GITHUB_OUTPUT"
 
-      - name: Cycle de collecte
-        run: npm run ci:cycle -- --minutes 20
+      # Ce marchand ne sert ses grilles qu'en JavaScript : la collecte passe par
+      # un vrai navigateur. Les images Ubuntu de GitHub embarquent Chrome, mais
+      # une image peut changer — mieux vaut le constater ici, en trois secondes,
+      # que trois heures plus tard sur « 0 produit ».
+      - name: Vérifier la présence de Chrome
+        run: |
+          set -euo pipefail
+          if command -v google-chrome-stable >/dev/null; then
+            google-chrome-stable --version
+          elif command -v google-chrome >/dev/null; then
+            google-chrome --version
+          else
+            echo "Chrome absent de l'image — installation."
+            npx playwright install --with-deps chromium
+          fi
+
+      - name: Collecte de Canadian Tire
+        run: npm run ci:cycle -- --magasin canadiantire-ca --minutes 180
 
       # Perdre un cycle est réparable ; écraser la release avec une base qui a
       # fondu ne l'est pas.

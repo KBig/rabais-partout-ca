@@ -32,6 +32,17 @@ const arg = (n: string) => {
 const BUDGET_MINUTES = Number(arg('minutes') ?? 25);
 const ENRICH_PER_RUN = Number(arg('enrich') ?? 250);
 
+/**
+ * UN SEUL MAGASIN, QUAND ON LE DEMANDE.
+ *
+ * Canadian Tire impose dix secondes entre deux pages et ne rend que
+ * vingt-quatre produits par chargement : son catalogue de 174 000 articles
+ * demande vingt heures pour un passage. Le faire concourir avec les autres
+ * dans un cycle de vingt minutes ne menerait nulle part — il lui faut une
+ * plage a lui, longue et rare, pendant que les autres gardent leur cadence.
+ */
+const SEUL = arg('magasin');
+
 const started = Date.now();
 /**
  * DU TEMPS RESERVE POUR CE QUI SUIT LA COLLECTE.
@@ -89,7 +100,11 @@ const totals = { seen: 0, created: 0, changes: 0, requests: 0 };
  * oublie passe devant, et l'historique de prix devient regulier pour tout le
  * monde — ce qui est exactement ce qu'on cherche a mesurer.
  */
-const classement = magasinsParPeremption();
+const classement = magasinsParPeremption().filter((m) => !SEUL || m.store.id === SEUL);
+if (SEUL && classement.length === 0) {
+  console.error(`Magasin inconnu : ${SEUL}`);
+  process.exit(2);
+}
 const ordre = classement.map((m) => m.store);
 
 log(
@@ -125,7 +140,9 @@ const CT_CRENEAU_MS = 5 * 60_000;
 const budgetParMagasin = (rang: number): number => {
   // Le magasin a creneau fixe est retire du partage : son temps est deja
   // reserve, le compter ici l'amputerait une seconde fois aux autres.
-  const aVenir = classement.slice(rang).filter((m) => m.store.id !== 'canadiantire-ca');
+  const aVenir = classement
+    .slice(rang)
+    .filter((m) => SEUL || m.store.id !== 'canadiantire-ca');
   const total = aVenir.reduce((n, m) => n + Math.max(1, m.produits), 0);
   const part = Math.max(1, aVenir[0]?.produits ?? 1) / Math.max(1, total);
   return Math.max(PLANCHER_MS, (finCollecte - Date.now()) * part);
@@ -147,7 +164,7 @@ for (const [rang, store] of ordre.entries()) {
    * n'est pas sa TAILLE mais son COUT — et un cout eleve se paie rarement, pas
    * chichement. Une fois par jour, avec de quoi travailler.
    */
-  if (store.id === 'canadiantire-ca') {
+  if (store.id === 'canadiantire-ca' && !SEUL) {
     const heures = classement[rang].heures;
     if (heures !== null && heures < CT_PERIODE_H) {
       log(`${store.name} · attend son creneau quotidien (vu il y a ${Math.round(heures)} h)`);
@@ -162,7 +179,7 @@ for (const [rang, store] of ordre.entries()) {
   const limite = new AbortController();
   const fin = setTimeout(
     () => limite.abort(),
-    store.id === 'canadiantire-ca'
+    store.id === 'canadiantire-ca' && !SEUL
       ? Math.min(CT_CRENEAU_MS, finCollecte - Date.now())
       : budgetParMagasin(rang),
   );
