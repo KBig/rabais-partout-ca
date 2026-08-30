@@ -192,25 +192,46 @@ export function extraireFiche(html: string, url: string): RawProduct | null {
   };
 }
 
-/** Les fiches produit, listees par leur propre sitemap. */
+/**
+ * Les fiches produit, listees par leur propre sitemap.
+ *
+ * ON JUGE UN SOUS-SITEMAP SUR SON CONTENU, PAS SUR SON NOM.
+ *
+ * La premiere version ne lisait que les fichiers nommes « sitemap_p_… », en
+ * supposant que « p » voulait dire produits. C'etait vrai, mais incomplet :
+ * « sitemap_i_001.xml » en contient 7 987 de plus — accessoires, pieces,
+ * compléments — soit presque autant que le fichier « p ». La moitie du
+ * catalogue etait donc invisible, et rien ne pouvait le signaler : le nom du
+ * fichier ne dit pas ce qu'il y a dedans.
+ *
+ * On les ouvre donc tous, et on garde les adresses qui ONT la forme d'une
+ * fiche produit. Ceux qui n'en contiennent aucune — listes filtrees par
+ * facette, entrepots, pages editoriales — sont retenus comme steriles et ne
+ * seront plus redemandes : trois d'entre eux pesent 110 000 adresses a eux
+ * seuls, et les relire a chaque passage serait du gaspillage pur.
+ */
 async function urlsProduit(ctx: CrawlContext): Promise<string[]> {
   const idx = await ctx.getText(`${BASE}/sitemap_index.xml`);
+  const steriles = urlsMortes(COSTCO_ID);
+
   const sousSitemaps = [...idx.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)]
     .map((m) => m[1])
-    // « _p_ » designe les produits. Les autres listent rayons, entrepots,
-    // pages editoriales — rien a collecter.
-    .filter((u) => /sitemap_p_\d+\.xml/i.test(u));
+    .filter((u) => !steriles.has(u));
 
   const urls: string[] = [];
   for (const s of sousSitemaps) {
     if (ctx.signal.aborted) break;
     try {
       const xml = await ctx.getText(s);
+      const avant = urls.length;
       for (const m of xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)) {
         if (/\.product\.\d+\.html/.test(m[1])) urls.push(m[1]);
       }
+      if (urls.length === avant) noterUrlMorte(COSTCO_ID, s, true);
+      else noterUrlVivante(COSTCO_ID, s);
     } catch {
-      // Un sous-sitemap indisponible ne doit pas interrompre les autres.
+      // Un sous-sitemap indisponible ne doit pas interrompre les autres, et ne
+      // doit pas non plus etre condamne : l'echec peut etre passager.
     }
   }
   return urls;

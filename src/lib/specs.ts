@@ -301,8 +301,16 @@ export const RULES: SpecRule[] = [
     }),
   },
   {
-    // Hors ecran, la meme mesure existe et reste utile — c'est un encombrement.
-    family: 'diagonale',
+    /**
+     * Hors ecran, la meme mesure existe et reste utile — c'est un encombrement.
+     *
+     * FAMILLE DISTINCTE, et non « diagonale ». Les deux regles partageaient ce
+     * nom, si bien que le filtre s'intitulait « Taille de l'ecran » sur une
+     * page de decorations de Noel : « Format 10 po », « Format 12 po » sous un
+     * titre qui parle d'ecrans, pour des boules de sapin. L'etiquette de
+     * chaque valeur etait juste ; c'est le nom du GROUPE qui mentait.
+     */
+    family: 'encombrement',
     match: /\b(\d{2,3})\s*(?:po|pouces?)\b/,
     metric: (m) => Number(m[1]),
     unit: 'po',
@@ -1276,6 +1284,7 @@ export const FAMILY_LABEL: Record<string, string> = {
   dalle: 'Type de dalle',
   rafraichissement: 'Rafraîchissement',
   diagonale: 'Taille de l’écran',
+  encombrement: 'Format',
   reponse: 'Temps de réponse',
   hdr: 'HDR',
   courbure: 'Courbure',

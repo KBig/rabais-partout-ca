@@ -33,7 +33,29 @@ const BUDGET_MINUTES = Number(arg('minutes') ?? 25);
 const ENRICH_PER_RUN = Number(arg('enrich') ?? 250);
 
 const started = Date.now();
+/**
+ * DU TEMPS RESERVE POUR CE QUI SUIT LA COLLECTE.
+ *
+ * Relever des prix ne sert a rien si l'on n'a plus le temps de les traduire en
+ * scores : un produit sans score n'apparait NULLE PART sur le site — ni dans
+ * les listes, ni dans les filtres par magasin, ni dans la page de son
+ * enseigne.
+ *
+ * Trois cycles de suite ont ete coupes en pleine chaine de calcul. Neuf
+ * magasins — IKEA, Costco, Canadian Tire, DeSerres et les autres, 35 000
+ * produits — sont restes invisibles pendant six heures. Le journal disait
+ * pourtant « ok » pour chacun d'eux : la collecte, elle, s'etait bien passee.
+ *
+ * Mesure de la chaine sur 370 000 produits : mise en coherence 189 s, scores
+ * 34 s, representants de variantes 12 s, caracteristiques 21 s. Quatre minutes
+ * et demie, auxquelles on ajoute de la marge.
+ */
+const RESERVE_CALCUL_MS = 6 * 60_000;
+
 const deadline = started + BUDGET_MINUTES * 60_000;
+
+/** Fin de la COLLECTE. Le reste du budget appartient aux calculs. */
+const finCollecte = Math.max(started + 60_000, deadline - RESERVE_CALCUL_MS);
 
 // Le signal d'annulation est partagé : quand le budget est épuisé, le crawl en
 // cours s'arrête proprement au lot suivant au lieu d'être tué net.
@@ -106,7 +128,7 @@ const budgetParMagasin = (rang: number): number => {
   const aVenir = classement.slice(rang).filter((m) => m.store.id !== 'canadiantire-ca');
   const total = aVenir.reduce((n, m) => n + Math.max(1, m.produits), 0);
   const part = Math.max(1, aVenir[0]?.produits ?? 1) / Math.max(1, total);
-  return Math.max(PLANCHER_MS, (deadline - Date.now()) * part);
+  return Math.max(PLANCHER_MS, (finCollecte - Date.now()) * part);
 };
 
 for (const [rang, store] of ordre.entries()) {
@@ -131,7 +153,7 @@ for (const [rang, store] of ordre.entries()) {
       log(`${store.name} · attend son creneau quotidien (vu il y a ${Math.round(heures)} h)`);
       continue;
     }
-    if (deadline - Date.now() < CT_CRENEAU_MS) {
+    if (finCollecte - Date.now() < CT_CRENEAU_MS) {
       log(`${store.name} · reporte : moins de ${CT_CRENEAU_MS / 60_000} min de budget restant`);
       continue;
     }
@@ -141,7 +163,7 @@ for (const [rang, store] of ordre.entries()) {
   const fin = setTimeout(
     () => limite.abort(),
     store.id === 'canadiantire-ca'
-      ? Math.min(CT_CRENEAU_MS, deadline - Date.now())
+      ? Math.min(CT_CRENEAU_MS, finCollecte - Date.now())
       : budgetParMagasin(rang),
   );
   const signal = AbortSignal.any([controller.signal, limite.signal]);
@@ -190,7 +212,7 @@ for (const [rang, store] of ordre.entries()) {
 
   // L'enrichissement ne tourne que s'il reste du temps : relever les prix
   // prime toujours, c'est lui qui construit l'historique.
-  if (!controller.signal.aborted && Date.now() < deadline - 5 * 60_000) {
+  if (!controller.signal.aborted && Date.now() < finCollecte - 60_000) {
     const enr = await enrichStore({
       storeId: store.id,
       limit: ENRICH_PER_RUN,
@@ -231,12 +253,61 @@ log(`${specs.caracteristiques} caracteristiques indexees, ${specs.retenues} dist
 await closeRenderer();
 const after = db().prepare('SELECT COUNT(*) n FROM price_points').get() as { n: number };
 
-// Compacte le fichier avant archivage : le job le téléverse ensuite, et chaque
-// mégaoctet économisé est du temps de transfert en moins à chaque cycle.
-// (`prepare().run()` plutôt que la méthode `exec` de SQLite, qui ressemble
-// suffisamment à celle de child_process pour déclencher les analyseurs.)
+/**
+ * COMPACTER, MAIS SEULEMENT QUAND CA VAUT LA PEINE.
+ *
+ * `VACUUM` reecrit le fichier entier. Sur une base de 950 Mo, cela prend
+ * plusieurs minutes — prises sur le temps de collecte, puisque le budget du
+ * cycle est le meme. Le faire a chaque passage revenait a recopier un
+ * gigaoctet pour recuperer quelques megaoctets.
+ *
+ * Et le gain de transfert est illusoire : les pages libres ne contiennent que
+ * des zeros, que la compression reduit deja a presque rien. Ce qu'on gagne
+ * vraiment, c'est de la place sur le disque — un besoin mensuel, pas horaire.
+ *
+ * On ne compacte donc que si la base contient assez de vide pour le justifier.
+ */
 db().pragma('wal_checkpoint(TRUNCATE)');
-db().prepare('VACUUM').run();
+
+const libres = Number(db().pragma('freelist_count', { simple: true }));
+const total = Number(db().pragma('page_count', { simple: true }));
+const partVide = total > 0 ? libres / total : 0;
+
+if (partVide > 0.15) {
+  const t0 = Date.now();
+
+  /**
+   * LE COMPACTAGE NE DOIT JAMAIS FAIRE ATTENDRE.
+   *
+   * `VACUUM` reecrit le fichier entier et exige un acces EXCLUSIF. Il suffit
+   * qu'une autre connexion soit ouverte — le serveur du site en developpement,
+   * par exemple — pour qu'il attende son tour. Avec le delai d'attente de
+   * soixante secondes hérité de la connexion partagee, un cycle est reste
+   * bloque deux heures et demie sur cette seule ligne, apres avoir fait tout
+   * son travail.
+   *
+   * Cinq secondes suffisent a savoir si la voie est libre. Sinon on renonce :
+   * compacter est une commodite, pas un resultat. Le cycle suivant reessaiera,
+   * et la compression de l'archive reduit de toute facon les pages vides a
+   * presque rien.
+   */
+  try {
+    db().pragma('busy_timeout = 5000');
+    // (`prepare().run()` plutôt que la méthode `exec` de SQLite, qui ressemble
+    // suffisamment à celle de child_process pour déclencher les analyseurs.)
+    db().prepare('VACUUM').run();
+    log(
+      `Base compactee : ${(partVide * 100).toFixed(0)} % de pages vides recuperees ` +
+        `en ${((Date.now() - t0) / 1000).toFixed(0)} s`,
+    );
+  } catch (e) {
+    log(`Compactage remis a plus tard : ${(e as Error).message}`);
+  } finally {
+    db().pragma('busy_timeout = 60000');
+  }
+} else {
+  log(`Compactage inutile (${(partVide * 100).toFixed(0)} % de pages vides)`);
+}
 
 const minutes = ((Date.now() - started) / 60_000).toFixed(1);
 log(

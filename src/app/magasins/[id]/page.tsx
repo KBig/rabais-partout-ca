@@ -88,7 +88,23 @@ export default async function MagasinPage({
           <div>
             <h1 className="text-2xl font-bold tracking-tight">{store.name}</h1>
             <p className="tnum mt-0.5 text-sm text-muted">
-              {num(total)} produit{total > 1 ? 's' : ''} suivi{total > 1 ? 's' : ''}
+              {/*
+                LE CATALOGUE DU MAGASIN, PAS LE RESULTAT FILTRE.
+                Cette ligne annoncait le nombre de produits RETENUS par les
+                filtres en cours. Elle affichait donc « 0 produit suivi » sur la
+                fiche d'un magasin qui en compte 441 — alors que la liste des
+                magasins, elle, annonce bien 441. Deux chiffres contradictoires
+                pour la meme enseigne, a un clic d'intervalle.
+                Le decompte filtre a sa place, mais a cote de la grille.
+              */}
+              {num(store.products)} produit{store.products > 1 ? 's' : ''} suivi
+              {store.products > 1 ? 's' : ''}
+              {total !== store.products && (
+                <span className="text-faint">
+                  {' · '}
+                  {num(total)} selon les filtres
+                </span>
+              )}
               {' · '}
               <a
                 href={store.homepage}

@@ -6,22 +6,29 @@
 # régulièrement pendant des semaines. Sur une machine personnelle il faudrait la
 # laisser allumée en permanence ; GitHub le fait gratuitement.
 #
-# CADENCE : ce dépôt est PRIVÉ, donc le quota gratuit est de 2 000 minutes par
-# mois. Le calcul décide de tout :
+# CADENCE : ce dépôt reste PRIVÉ, donc GitHub offre 2 000 minutes par mois.
+# Tout le réglage tient dans cette contrainte, et le calcul est simple :
 #
-#   12 h × 25 min = 2 passages/jour = 1 500 min/mois   (ancienne cadence)
-#    6 h × 15 min = 4 passages/jour = 1 800 min/mois   (celle-ci)
+#   minutes/mois = 30 jours × passages par jour × durée d'un passage
 #
-# Même quota, DEUX FOIS plus de relevés. C'est la répétition qui construit
-# l'historique, pas la durée d'un passage isolé : quatre relevés par jour
-# datent un changement de prix à six heures près, contre douze auparavant.
+# La durée d'un passage n'est pas seulement la collecte : il faut y ajouter le
+# temps de récupérer la base, de la décompresser, de la recompresser et de la
+# reverser — environ quatre minutes pour un fichier de cette taille.
 #
-# Le budget plus court impose en revanche de le répartir : dix magasins en
-# quinze minutes, ce serait toujours le premier servi et jamais le dernier.
-# `ci-cycle` fait donc tourner l'ordre de passage d'un cycle à l'autre.
+#   4 passages/jour × 15 min de collecte ≈ 19 min → 2 280 min/mois   DÉPASSE
+#   3 passages/jour × 15 min de collecte ≈ 19 min → 1 710 min/mois
+#   4 passages/jour × 10 min de collecte ≈ 14 min → 1 680 min/mois   ← celui-ci
 #
-# Sur un dépôt public, Actions est illimité : une cadence de 2 h deviendrait
-# possible en changeant la seule ligne `cron` ci-dessous.
+# Les deux derniers tiennent dans le quota, mais ils ne se valent pas. À
+# quarante minutes de collecte par jour dans les deux cas, quatre passages
+# datent un changement de prix à six heures près, trois seulement à huit. La
+# fréquence des relevés vaut mieux que leur longueur : c'est la répétition qui
+# construit l'historique, pas la durée d'un passage isolé.
+#
+# Ce raisonnement a remplacé un projet de dépôt public — Actions y est
+# illimité, mais il aurait fallu écrire au support de GitHub pour purger
+# d'anciens objets, et publier le code à tout le monde. Deux inconvénients
+# bien réels pour un gain que le quota permet déjà d'obtenir.
 #
 # OÙ VIT LA BASE
 # --------------
@@ -53,11 +60,10 @@ permissions:
 jobs:
   collecte:
     runs-on: ubuntu-latest
-    # La base pese pres d'un gigaoctet : la telecharger, la decompresser, la
-    # recompresser et la reverser prend environ six minutes en plus des quinze
-    # de collecte. Le plafond precedent de trente minutes ne laissait presque
-    # aucune marge, et un job coupe au milieu n'archive rien.
-    timeout-minutes: 45
+    # Plafond de sécurité, pas une cible : un passage normal dure environ
+    # quatorze minutes. Il sert à couper un job bloqué, jamais un job qui
+    # travaille — et un job coupé au milieu n'archive rien.
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
@@ -116,7 +122,7 @@ jobs:
         run: echo "empreinte=$(npx tsx scripts/garde-base.ts empreinte)" >> "$GITHUB_OUTPUT"
 
       - name: Cycle de collecte
-        run: npm run ci:cycle -- --minutes 15
+        run: npm run ci:cycle -- --minutes 10
 
       # Perdre un cycle est réparable ; écraser la release avec une base qui a
       # fondu ne l'est pas.
