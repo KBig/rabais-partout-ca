@@ -80,6 +80,14 @@ export interface CrawlContext {
    * document. Evite de telecharger — et de faire servir — le reste.
    */
   getPartial: (url: string, assez: (contenu: string) => boolean) => Promise<string>;
+  /**
+   * GET d'une ressource qui peut etre gzippee DANS LE FICHIER (« .xml.gz »).
+   *
+   * Distinct de la compression HTTP, que `fetch` defait tout seul. Ici le
+   * serveur annonce un binaire, et le lire comme du texte donne des octets
+   * illisibles sans lever la moindre erreur.
+   */
+  getMaybeGzip: (url: string) => Promise<string>;
   /** Compteur de requêtes, pour les stats de run. */
   requests: () => number;
 }

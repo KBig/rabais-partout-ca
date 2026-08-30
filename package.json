@@ -26,7 +26,8 @@
     "sitemaps": "tsx scripts/sitemaps.ts",
     "brands": "tsx scripts/brands.ts",
     "specs": "tsx scripts/specs.ts",
-    "sync": "tsx scripts/sync.ts"
+    "sync": "tsx scripts/sync.ts",
+    "site": "next build && next start"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",

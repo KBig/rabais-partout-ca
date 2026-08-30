@@ -212,4 +212,27 @@ export class HttpClient {
     );
     return await res.text();
   }
+
+  /**
+   * Texte d'une ressource EVENTUELLEMENT COMPRESSEE dans le fichier lui-meme.
+   *
+   * Un « .xml.gz » n'est pas une reponse compressee au sens HTTP : le serveur
+   * annonce un fichier binaire, et `fetch` le rend tel quel. Le lire comme du
+   * texte donne des octets illisibles — silencieusement, sans erreur.
+   *
+   * Walmart publie ses sitemaps ainsi : plus d'un million d'adresses reparties
+   * en fichiers gzip. On decompresse donc quand la signature gzip est la, et
+   * seulement dans ce cas — un serveur qui deciderait de servir ce meme fichier
+   * en clair continuerait de fonctionner.
+   */
+  async getMaybeGzip(url: string, init: RequestInit = {}, signal?: AbortSignal): Promise<string> {
+    const res = await this.raw(url, { ...init, headers: { Accept: '*/*', ...(init.headers as any) } }, signal);
+    const buf = Buffer.from(await res.arrayBuffer());
+    // 0x1f 0x8b : les deux octets qui ouvrent tout flux gzip.
+    if (buf.length > 2 && buf[0] === 0x1f && buf[1] === 0x8b) {
+      const { gunzipSync } = await import('node:zlib');
+      return gunzipSync(buf).toString('utf8');
+    }
+    return buf.toString('utf8');
+  }
 }

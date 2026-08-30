@@ -2,7 +2,19 @@ import Link from 'next/link';
 import { activeStores } from '@/lib/db/queries';
 import { num } from '@/lib/format';
 
-export const dynamic = 'force-dynamic';
+/**
+ * PAGE MISE EN CACHE UNE MINUTE.
+ *
+ * `force-dynamic` recalculait tout a chaque affichage : rien n'etait garde,
+ * pas meme entre deux clics sur le meme lien. Or les prix ne bougent qu'apres
+ * une collecte, soit toutes les trois heures. Rendre la meme page quarante
+ * fois par minute etait du travail refait pour un resultat identique.
+ *
+ * Soixante secondes est un compromis prudent : bien plus court que l'intervalle
+ * de collecte — donc aucun risque d'afficher un prix perime — et bien plus long
+ * qu'une session de navigation, ou l'on revient sans cesse sur les memes pages.
+ */
+export const revalidate = 60;
 
 export const metadata = {
   title: 'Magasins — Item Finder',

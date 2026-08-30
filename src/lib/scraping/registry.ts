@@ -10,6 +10,7 @@ import {
   REGLES_MODE,
   IGNORER_MAISON,
 } from './stores/shopify';
+import { createMagentoAdapter } from './stores/magento';
 
 /**
  * Registre des sources de prix.
@@ -81,13 +82,34 @@ export const STORES: StoreMeta[] = [
     homepage: 'https://www.walmart.ca',
     color: '#0071CE',
     requestsPerSecond: 0.5,
+    /**
+     * FERME EN PRATIQUE, ET J'AI CRU LE CONTRAIRE.
+     *
+     * Leurs sitemaps sont lisibles — seize fichiers, dont un de 218 257
+     * articles vendus par Walmart lui-meme — et leur robots.txt autorise les
+     * fiches produit. Une requete isolee vers l'une d'elles rend bien 329 Ko
+     * avec le prix. J'en ai annonce une percee.
+     *
+     * A l'echelle, non. Mille trois cent quatre-vingt-onze requetes plus tard :
+     * zero produit. Chacune recevait une page de sept kilo-octets intitulee
+     * « Verify Your Identity ». Le premier essai n'avait pas prouve que la
+     * porte etait ouverte — seulement qu'une requete unique passe inapercue.
+     *
+     * Contourner cette verification demanderait d'imiter un navigateur assez
+     * finement pour tromper leur detection. C'est une barriere posee
+     * volontairement, et la franchir n'est pas la meme chose qu'utiliser une
+     * porte laissee ouverte. On s'arrete ici.
+     *
+     * S'ajoutent les conditions de leur API officielle, qui excluent
+     * explicitement son usage « par des concurrents pour analyser les prix » —
+     * ce qui vise precisement un comparateur.
+     */
     blocked:
-      'Deux refus distincts. Leurs fiches produit redirigent vers un défi ' +
-      '« Verify Your Identity », et leur robots.txt interdit API et recherche. ' +
-      'Surtout, les conditions de leur API officielle excluent explicitement ' +
-      'son usage « par des concurrents pour analyser les prix ou la ' +
-      'disponibilité » — ce qui vise précisément un comparateur. Même la porte ' +
-      'officielle est fermée à cet usage.',
+      'Défi « Verify Your Identity » servi à toute collecte soutenue : ' +
+      '1 391 requêtes, zéro produit. Les sitemaps sont pourtant lisibles et ' +
+      'leur robots.txt autorise les fiches. Une requête isolée passe, un ' +
+      'parcours non. Franchir cette vérification serait contourner une ' +
+      'barrière posée volontairement.',
   },
   {
     id: 'canadiantire-ca',
@@ -200,7 +222,13 @@ export const STORES: StoreMeta[] = [
     currency: 'CAD',
     homepage: 'https://www.structube.com',
     color: '#1A1A1A',
-    requestsPerSecond: 0.75,
+    requestsPerSecond: 1,
+    adapter: createMagentoAdapter({
+      id: 'structube-ca',
+      base: 'https://www.structube.com',
+      rules: [...REGLES_MAISON, ...REGLES_MODE],
+      ignore: IGNORER_MAISON,
+    }),
   },
   {
     id: 'wayfair-ca',
@@ -260,7 +288,13 @@ export const STORES: StoreMeta[] = [
     currency: 'CAD',
     homepage: 'https://www.linenchest.com',
     color: '#4A4A4A',
-    requestsPerSecond: 0.75,
+    requestsPerSecond: 1,
+    adapter: createMagentoAdapter({
+      id: 'linenchest-ca',
+      base: 'https://www.linenchest.com',
+      rules: [...REGLES_MAISON, ...REGLES_MODE],
+      ignore: IGNORER_MAISON,
+    }),
   },
   {
     id: 'stokes-ca',

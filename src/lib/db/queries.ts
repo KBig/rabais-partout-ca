@@ -18,7 +18,6 @@ export interface DealRow {
   model: string | null;
   url: string;
   imageUrl: string | null;
-  description: string | null;
   storeId: string;
   storeName: string;
   storeColor: string | null;
@@ -71,7 +70,10 @@ export interface ProductReview {
 
 const SELECT_DEAL = `
   SELECT p.id, p.title, p.brand, p.model, p.url, p.image_url AS imageUrl,
-         p.description,
+         -- Le descriptif n'est PAS ici. Aucune vignette ne l'affiche, mais il
+         -- pese 411 octets par article — 22 % de tout ce qui traverse le
+         -- reseau pour une grille de quarante. La fiche produit, elle, le lit
+         -- directement dans la table products, la ou il est reellement utile.
          p.store_id AS storeId, st.name AS storeName, st.color AS storeColor,
          p.category_slug AS categorySlug, p.condition, p.currency,
          p.availability, p.marketplace, p.seller_name AS sellerName,
@@ -433,11 +435,22 @@ export function toFtsQuery(raw: string): string | null {
     .join(' AND ');
 }
 
-export function getProduct(id: number): DealRow | null {
+/**
+ * Une fiche complete, descriptif compris.
+ *
+ * Le descriptif est retire des LISTES — aucune vignette ne l'affiche, et il y
+ * pese 22 % de la charge. Ici il est indispensable : c'est de lui que
+ * l'analyse des composantes tire ce qu'elle sait du produit.
+ */
+export interface ProductRow extends DealRow {
+  description: string | null;
+}
+
+export function getProduct(id: number): ProductRow | null {
   const row = db()
-    .prepare(`${SELECT_DEAL} WHERE p.id = ?`)
+    .prepare(`${SELECT_DEAL.replace('SELECT p.id', 'SELECT p.description, p.id')} WHERE p.id = ?`)
     .get(id);
-  return row ? hydrate(row) : null;
+  return row ? (hydrate(row) as ProductRow) : null;
 }
 
 export interface ManufacturerReference {
