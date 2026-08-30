@@ -189,10 +189,33 @@ export function extraireCartes(html: string, slug: string): RawProduct[] {
     // La marque est en gras a l'interieur du titre.
     const marque = titreBrut?.match(/nl-product__brand--bold[^>]*>([^<]{2,40})</i)?.[1]?.trim();
 
+    /**
+     * LA PHOTO DU PRODUIT, PAS LA PASTILLE PROMOTIONNELLE.
+     *
+     * On prenait la DERNIERE image avant le prix. Mais leur grille superpose
+     * des pastilles aux cartes — « Nouveauté », « Testé pour l'hiver » — et ces
+     * images-la viennent APRES la photo dans le document. La derniere etait
+     * donc la pastille, jamais le produit : 82 fiches affichaient un rectangle
+     * orange « Nouveauté » a la place de l'article.
+     *
+     * Rien dans le code ne pouvait le voir : l'adresse etait valide, l'image
+     * s'affichait, le produit avait bien une photo. Seul un oeil humain
+     * remarquait qu'elle ne montrait pas le bon objet.
+     *
+     * Leur arborescence separe pourtant les deux sans ambiguite. Les photos de
+     * produit vivent sous « /product/ », les habillages de rayon sous
+     * « /category-content/ ». On s'appuie sur cette separation plutot que sur
+     * l'ordre d'apparition, qui ne garantissait rien.
+     */
     const images = [
       ...avant.matchAll(/<img[^>]+src="(https:\/\/media-www\.canadiantire\.ca\/[^"]+)"/gi),
-    ];
-    const image = images[images.length - 1]?.[1];
+    ]
+      .map((m) => m[1])
+      .filter((u) => !/\/category-content\//i.test(u));
+
+    // A defaut de chemin « /product/ » explicite, la derniere image restante
+    // reste le meilleur candidat : les pastilles, elles, sont deja ecartees.
+    const image = images.filter((u) => /\/product\//i.test(u)).pop() ?? images.pop();
     const imagePropre = image ? image.replace(/[?&](wid|hei)=\d+/g, '') : null;
 
     vus.add(id);
@@ -263,7 +286,30 @@ async function* parcourir(ctx: CrawlContext, filtre?: string): AsyncGenerator<Ra
    * jamais de releve — 441 produits collectes la ou le catalogue en compte des
    * dizaines de milliers.
    */
-  const ordre = parCouverture(cibles, (c) => c.url, curseursDe(CT_ID));
+  const curseurs = curseursDe(CT_ID);
+
+  /**
+   * LES PAGES DE PREMIER NIVEAU NE SONT PAS DES GRILLES.
+   *
+   * Leur sitemap publie 1 743 rayons rattachables sur cinq niveaux. Le premier
+   * reflexe — attaquer par les rayons les plus generaux — est FAUX ici, et la
+   * verification l'a montre : « Outils et quincaillerie » est une vitrine,
+   * seize produits en carrousels, sans pagination ni grille. Dix secondes
+   * depensees pour seize articles.
+   *
+   * Les vraies grilles commencent au deuxieme niveau : « Bas et porte-bas de
+   * Noel » annonce 57 resultats, vingt-quatre par page, et `?page=2` fonctionne.
+   * On ecarte donc le premier niveau, et l'ordre redevient celui de la
+   * couverture — ce qui a ete le moins vu passe devant.
+   *
+   * Le debit reel est de vingt-quatre produits par chargement, et `count=96`
+   * est ignore : leur regle des dix secondes fixe le reste. Cent soixante-
+   * quatorze mille articles demandent donc vingt heures pour un passage. C'est
+   * une limite de LEUR cote, pas une inefficacite du notre.
+   */
+  const profondeur = (u: string) => u.split('/cat/')[1]?.split('/').length ?? 9;
+  const grilles = cibles.filter((c) => profondeur(c.url) >= 2);
+  const ordre = parCouverture(grilles, (c) => c.url, curseurs);
 
   try {
     for (const { url, slug } of ordre) {
@@ -271,7 +317,18 @@ async function* parcourir(ctx: CrawlContext, filtre?: string): AsyncGenerator<Ra
 
       const vusRayon = new Set<string>();
 
-      for (let page = 1; page <= PAGES_MAX; page++) {
+      /**
+       * ON REPREND OU L'ON S'ETAIT ARRETE DANS CE RAYON.
+       *
+       * Un rayon general depasse largement les vingt-cinq pages autorisees par
+       * passage. Sans curseur, on relisait eternellement ses vingt-cinq
+       * premieres pages et le reste n'existait pas.
+       */
+      const depart = curseurs.get(url)?.page ?? 1;
+      let page = depart;
+      let finDuRayon = false;
+
+      for (; page < depart + PAGES_MAX; page++) {
         if (ctx.signal.aborted || emis >= ctx.limits.maxProducts) break;
 
         const adresse = page === 1 ? url : `${url}?page=${page}`;
@@ -300,7 +357,12 @@ async function* parcourir(ctx: CrawlContext, filtre?: string): AsyncGenerator<Ra
         const lot = vues.flatMap((v) => extraireCartes(v, slug));
         const parSku = new Map(lot.map((p) => [p.sku, p]));
         const nouveaux = [...parSku.values()].filter((p) => !vusRayon.has(p.sku));
-        if (nouveaux.length === 0) break; // page vide ou repetition : rayon fini
+        if (nouveaux.length === 0) {
+          // Page vide ou repetition : le rayon est epuise. Le tour suivant
+          // repartira de sa premiere page, pour en relever les prix.
+          finDuRayon = true;
+          break;
+        }
 
         for (const p of nouveaux) {
           vusRayon.add(p.sku);
@@ -312,15 +374,13 @@ async function* parcourir(ctx: CrawlContext, filtre?: string): AsyncGenerator<Ra
         await sommeil(DELAI_MS);
       }
 
-      if (vusRayon.size > 0) ctx.log(`  ${slug} ← ${vusRayon.size} produits`);
+      if (vusRayon.size > 0) {
+        ctx.log(`  ${slug} ← ${vusRayon.size} produits (pages ${depart} a ${page - 1})`);
+      }
 
-      // Le rayon a ete parcouru jusqu'a sa fin — page vide, repetition, ou mur
-      // de pagination. Un tour de plus a son compteur : il passera derriere
-      // ceux qui n'ont pas encore ete vus.
-      //
-      // Rien n'est enregistre si l'on a ete interrompu au milieu : le rayon
-      // serait compte comme couvert alors qu'il ne l'est pas.
-      if (!ctx.signal.aborted) avancerCurseur(CT_ID, url, 1, true);
+      // Rien n'est enregistre si l'on a ete interrompu au milieu : la page en
+      // cours n'a pas ete lue en entier, et la sauter perdrait ses produits.
+      if (!ctx.signal.aborted) avancerCurseur(CT_ID, url, page, finDuRayon);
     }
   } finally {
     await closeRenderer();
