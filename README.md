@@ -10,15 +10,43 @@ mauvais achat, et un « −60 % » sur un prix régulier fictif n'est pas un rab
 
 ## Démarrage
 
+Sur une machine neuve, trois commandes suffisent. **Node.js et Git sont les
+seuls prérequis** — pas de client GitHub, pas d'outil de compression, pas de
+clé d'API.
+
 ```bash
-npm install
-npm run db:migrate
-npm run crawl -- --store bestbuy-ca --all
-npm run enrich -- --store bestbuy-ca --limit 300
-npm run dev
+npm ci
+npm run sync
+npm run site
 ```
 
 Le site est sur http://localhost:3000.
+
+### Où vit quoi
+
+Le dépôt Git contient **tout le code**, et rien d'autre. La base de données —
+près d'un gigaoctet, qui grossit à chaque collecte — vit ailleurs : elle est
+publiée comme **pièce jointe de release**, compressée d'un facteur six.
+
+`npm run sync` la rapatrie par un simple lien public, vérifie qu'elle est
+complète et lisible, et ne remplace l'ancienne qu'après. Un téléchargement
+interrompu ne peut donc pas laisser une base cassée à la place d'une qui
+marchait, et un second appel reprend là où le premier s'est arrêté.
+
+Conséquence pratique : **cloner le dépôt sur n'importe quelle machine et
+lancer `npm run sync` redonne l'état exact de la collecte**, souvent plus à
+jour que la copie locale — la collecte tourne sur GitHub, pas sur une machine
+en particulier.
+
+### Développer, ou simplement utiliser
+
+| Commande | Pour quoi |
+| --- | --- |
+| `npm run site` | **Version de production.** Chaque page en 0,1 s. |
+| `npm run dev` | Version de développement : recompile à chaque clic, donc lente. À réserver aux modifications de code. |
+
+L'écart n'est pas anecdotique — plus d'un ordre de grandeur — et il a déjà été
+pris pour une lenteur du site.
 
 ### Commandes
 

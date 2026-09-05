@@ -71,35 +71,81 @@ async function decompresser(source: string, cible: string): Promise<void> {
   });
 }
 
+/**
+ * D'OU L'ON TELECHARGE.
+ *
+ * Le depot est public : sa piece jointe de release s'obtient par un simple
+ * lien, sans compte ni outil. La premiere version passait par `gh`, ce qui
+ * imposait d'installer et de connecter le client GitHub sur toute machine
+ * voulant reprendre le projet. Node et Git suffisent desormais.
+ *
+ * `gh` reste en second recours : il sait lire un depot prive, et sert donc si
+ * la visibilite change un jour.
+ */
+const DEPOT = 'KBig/rabais-partout-ca';
+const LIEN = `https://github.com/${DEPOT}/releases/download/db/itemfinder.db.zst`;
+
+async function telecharger(url: string, cible: string): Promise<void> {
+  const r = await fetch(url, { redirect: 'follow' });
+  if (!r.ok || !r.body) throw new Error(`HTTP ${r.status}`);
+
+  const annonce = Number(r.headers.get('content-length') ?? 0);
+  if (annonce) console.log(`  archive annoncee : ${mo(annonce)}`);
+
+  const { Writable } = await import('node:stream');
+  const { pipeline } = await import('node:stream/promises');
+  const { createWriteStream } = await import('node:fs');
+
+  let recu = 0;
+  const sortie = createWriteStream(cible);
+  await pipeline(
+    r.body as unknown as NodeJS.ReadableStream,
+    new Writable({
+      write(morceau: Buffer, _enc, suite) {
+        recu += morceau.length;
+        sortie.write(morceau, () => suite());
+      },
+      final(suite) {
+        sortie.end(() => suite());
+      },
+    }),
+  );
+
+  // Un telechargement coupe rend un fichier valide en apparence. Le comparer a
+  // la taille annoncee coute une soustraction et evite de remplacer une base
+  // qui marche par une archive tronquee.
+  if (annonce && recu !== annonce) {
+    rmSync(cible, { force: true });
+    throw new Error(`archive incomplete : ${recu} octets sur ${annonce}`);
+  }
+}
+
 mkdirSync(dossier, { recursive: true });
 
-console.log('Telechargement de la base publiee…');
-const publiees = sh('gh', ['release', 'view', 'db', '--json', 'assets', '--jq', '.assets[].name'])
-  .split('\n')
-  .map((s) => s.trim());
+// Une base neuve laissee par un essai interrompu evite de tout retelecharger.
+const dejaLa = existsSync(neuve) && statSync(neuve).size > 1_000_000;
+if (dejaLa) console.log('Base deja telechargee lors d un essai precedent — reprise.');
 
-if (publiees.includes('itemfinder.db.zst')) {
-  sh('gh', ['release', 'download', 'db', '--pattern', 'itemfinder.db.zst', '--dir', dossier, '--clobber']);
-  console.log(`  archive : ${mo(statSync(compresse).size)}`);
-  // L'outil `zstd` n'est pas installe d'office sous Windows : la decompression
-  // passe par une bibliotheque JavaScript pure, sans rien a installer a cote.
-  //
-  // EN FLUX, jamais d'un bloc : la base decompressee approche le gigaoctet et
-  // ne tiendrait pas dans un seul tampon.
+console.log(dejaLa ? '' : 'Telechargement de la base publiee…');
+try {
+  if (!dejaLa) await telecharger(LIEN, compresse);
+} catch (e) {
+  console.log(`  lien public indisponible (${(e as Error).message}) — essai par gh`);
+  sh('gh', [
+    'release', 'download', 'db', '--repo', DEPOT,
+    '--pattern', 'itemfinder.db.zst', '--dir', dossier, '--clobber',
+  ]);
+}
+if (!dejaLa) console.log(`  archive : ${mo(statSync(compresse).size)}`);
+
+// L'outil `zstd` n'est pas installe d'office sous Windows : la decompression
+// passe par une bibliotheque JavaScript pure, sans rien a installer a cote.
+//
+// EN FLUX, jamais d'un bloc : la base decompressee approche le gigaoctet et ne
+// tiendrait pas dans un seul tampon.
+if (!dejaLa) {
   await decompresser(compresse, neuve);
   rmSync(compresse, { force: true });
-} else if (publiees.includes('itemfinder.db')) {
-  // Ancien format, non compresse. Le telechargement va dans un dossier a part :
-  // vise sur `data/`, il ecraserait la base locale AVANT toute verification,
-  // ce qui est exactement ce que cette commande s'interdit.
-  const bac = join(dossier, '.telechargement');
-  mkdirSync(bac, { recursive: true });
-  sh('gh', ['release', 'download', 'db', '--pattern', 'itemfinder.db', '--dir', bac, '--clobber']);
-  renameSync(join(bac, 'itemfinder.db'), neuve);
-  rmSync(bac, { recursive: true, force: true });
-} else {
-  console.error('Aucune base publiee sur la release `db`.');
-  process.exit(1);
 }
 
 // VERIFIER AVANT DE REMPLACER.
@@ -124,11 +170,38 @@ if (produits === 0) {
   process.exit(1);
 }
 
-if (existsSync(DB_PATH)) {
-  rmSync(precedente, { force: true });
-  renameSync(DB_PATH, precedente);
+/**
+ * L'ECHANGE DES FICHIERS.
+ *
+ * Windows refuse de renommer un fichier qu'un autre programme tient ouvert.
+ * Le site en cours d'execution garde une connexion a la base : la commande
+ * echouait alors sur une pile d'erreurs « EBUSY » incomprehensible, la base
+ * neuve deja telechargee et abandonnee sur le disque.
+ *
+ * Le cas est banal — on oublie que le site tourne — et il merite une phrase,
+ * pas une trace d'exception.
+ */
+try {
+  if (existsSync(DB_PATH)) {
+    rmSync(precedente, { force: true });
+    renameSync(DB_PATH, precedente);
+  }
+  renameSync(neuve, DB_PATH);
+} catch (e) {
+  const err = e as NodeJS.ErrnoException;
+  if (err.code === 'EBUSY' || err.code === 'EPERM') {
+    console.error(
+      `
+La base actuelle est ouverte par un autre programme — le site, sans doute.
+` +
+        `Arretez-le, puis relancez « npm run sync ».
+` +
+        `La base telechargee est conservee sous ${neuve} : rien n'est a retelecharger.`,
+    );
+    process.exit(1);
+  }
+  throw e;
 }
-renameSync(neuve, DB_PATH);
 // Les fichiers WAL de l'ancienne base ne decrivent plus celle-ci.
 for (const suffixe of ['-wal', '-shm']) rmSync(`${DB_PATH}${suffixe}`, { force: true });
 
