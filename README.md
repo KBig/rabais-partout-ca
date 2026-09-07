@@ -22,6 +22,28 @@ npm run site
 
 Le site est sur http://localhost:3000.
 
+Node 22 ou plus récent est exigé, et c'est la seule contrainte de version.
+
+### Le champ `allowScripts` de `package.json` doit rester
+
+Depuis npm 11.17, les scripts d'installation des dépendances ne s'exécutent
+plus sans autorisation explicite. npm se contente d'un **avertissement** quand
+il en bloque un : l'installation paraît réussir alors qu'une dépendance est
+restée inutilisable. Le champ `allowScripts` tranche la question une fois pour
+toutes, et il vaut la peine de comprendre ses deux entrées avant d'y toucher.
+
+`esbuild` est à `true` : son script d'installation met en place le binaire de
+la plateforme, et sans lui `tsx` ne démarre pas — donc aucune des commandes de
+ce dépôt.
+
+`better-sqlite3` est à `false`, et c'est délibéré. Son script lance une
+compilation C++ dont le résultat n'est **jamais chargé** : le paquet npm
+embarque déjà un binaire pour chaque plateforme, y compris Windows. Le laisser
+à `true` réclamerait Python et un compilateur C++ sur une machine neuve — soit
+plusieurs gigaoctets d'outils — pour produire un fichier inutile. Le refuser
+explicitement, plutôt que de le laisser non déclaré, évite en prime
+l'avertissement à chaque installation.
+
 ### Où vit quoi
 
 Le dépôt Git contient **tout le code**, et rien d'autre. La base de données —

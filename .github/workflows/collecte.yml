@@ -150,10 +150,61 @@ jobs:
       # Les workflows planifiés sont désactivés après 60 jours sans activité sur
       # le dépôt. Ce commit trivial garde la collecte en vie.
       - name: Marquer l'activité du dépôt
+        env:
+          BRANCHE: ${{ github.ref_name }}
         run: |
+          set -euo pipefail
           date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/derniere-collecte
           git config user.name "collecte"
           git config user.email "collecte@users.noreply.github.com"
           git add .github/derniere-collecte
-          git diff --staged --quiet || git commit -m "collecte: cycle terminé"
-          git push
+
+          if git diff --staged --quiet; then
+            echo "Marqueur déjà à jour, rien à pousser."
+            exit 0
+          fi
+          git commit -m "collecte: cycle terminé"
+
+          # LE DÉPÔT A PU AVANCER PENDANT LE CYCLE.
+          #
+          # `actions/checkout` fige la révision au moment où le run est CRÉÉ,
+          # pas au moment où il démarre. Or les deux collectes partagent un
+          # groupe de concurrence : celle des prix reste parfois en attente
+          # pendant que Canadian Tire tourne, puis démarre sur une révision
+          # antérieure au marqueur que Canadian Tire vient de pousser.
+          #
+          # Le push était alors rejeté et le cycle passait au rouge, alors que
+          # la base venait d'être archivée sans le moindre problème. Les quatre
+          # échecs observés du 4 au 7 septembre 2026 ont tous cette cause.
+          #
+          # On rejoue donc le marqueur par-dessus ce qui est arrivé entre-temps.
+          for essai in 1 2 3 4 5; do
+            if git push origin "HEAD:$BRANCHE"; then
+              exit 0
+            fi
+
+            echo "Push rejeté (tentative $essai) : le dépôt a avancé."
+
+            # SURTOUT PAS DE REBASE ICI.
+            #
+            # Les deux collectes écrivent le MÊME fichier marqueur : rejouer
+            # notre commit par-dessus le leur produirait un conflit à tous les
+            # coups, c'est-à-dire exactement quand ce rattrapage doit servir.
+            #
+            # On reprend donc l'état publié et on y réécrit le marqueur. Rien
+            # n'est perdu : à ce stade la base est déjà archivée sur la release,
+            # et ce commit ne porte que l'horodatage.
+            git fetch origin "$BRANCHE"
+            git reset --hard "origin/$BRANCHE"
+
+            date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/derniere-collecte
+            git add .github/derniere-collecte
+            if git diff --staged --quiet; then
+              echo "Le marqueur publié est déjà à la bonne seconde."
+              exit 0
+            fi
+            git commit -m "collecte: cycle terminé"
+          done
+
+          echo "Le marqueur n'a pas pu être poussé après cinq tentatives." >&2
+          exit 1
