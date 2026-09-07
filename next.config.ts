@@ -21,10 +21,16 @@ const config: NextConfig = {
      * resservir un rendu vieux de quelques minutes n'a aucun intérêt : chaque
      * page est déjà servie en quelques millisecondes grâce aux index
      * dénormalisés. On préfère donc toujours redemander au serveur.
+     *
+     * `static` ne descend toutefois plus sous 30 depuis Next 16. La valeur 0
+     * était refusée au démarrage, et Next retombait alors sur SON défaut, bien
+     * plus long que 30 : demander zéro donnait l'inverse de zéro. 30 est le
+     * minimum accepté, et il reste sans effet visible ici, les pages concernées
+     * se revalidant déjà toutes les 60 secondes.
      */
     staleTimes: {
       dynamic: 0,
-      static: 0,
+      static: 30,
     },
   },
 };
